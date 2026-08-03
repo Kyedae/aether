@@ -145,7 +145,8 @@ public class PestPrepSwapManager {
             }
         }
 
-        while (LoadoutManager.isSwappingLoadout && !PestManager.isCleaningInProgress()) {
+        while ((LoadoutManager.isSwappingLoadout || !LoadoutManager.loadoutGuiCloseComplete)
+                && !PestManager.isCleaningInProgress()) {
             MacroWorkerThread.sleep(50);
         }
         MacroWorkerThread.sleep(250);

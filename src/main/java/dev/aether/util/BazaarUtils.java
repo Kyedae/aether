@@ -606,11 +606,7 @@ public final class BazaarUtils {
     }
 
     private static void closeScreen(Minecraft client) {
-        client.execute(() -> {
-            if (client.player != null && client.screen != null) {
-                client.player.closeContainer();
-            }
-        });
+        ClientUtils.closeGui(client);
     }
 
     private static String stripColors(String s) {

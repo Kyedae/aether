@@ -38,6 +38,8 @@ public class PestManager {
     private static volatile boolean isCleaningTriggerPending = false;
     private static volatile long pestReentryCooldownUntilMs = 0;
     private static volatile PendingChatTrigger pendingChatTrigger;
+    private static volatile boolean pendingChatTriggerWaitsForLoadout = false;
+    private static volatile long pendingChatTriggerDelayAfterLoadoutMs = 0L;
     private static volatile int lastCleaningAliveCount = -1;
     private static volatile long lastCleaningProgressAtMs = 0L;
     private static volatile boolean rewarpTriggerAvailable = false;
@@ -177,6 +179,8 @@ public class PestManager {
         isCleaningTriggerPending = false;
         pestReentryCooldownUntilMs = 0;
         pendingChatTrigger = null;
+        pendingChatTriggerWaitsForLoadout = false;
+        pendingChatTriggerDelayAfterLoadoutMs = 0L;
         lastCleaningAliveCount = -1;
         lastCleaningProgressAtMs = 0L;
         rewarpTriggerAvailable = false;
@@ -335,21 +339,34 @@ public class PestManager {
 
     /** Schedules a chat trigger without blocking the shared worker or farming. */
     public static synchronized void scheduleChatCleaningTrigger(String plot, int spawnedCount, long delayMs) {
+        boolean requestedBallsackLoadout = false;
         if (AetherConfig.BALLSACK_SHREDDER.get()) {
             int farmingSlot = AetherConfig.LOADOUT_SLOT_FARMING.get();
-            if (farmingSlot > 0) {
-                if (LoadoutManager.trackedLoadoutSlot != farmingSlot
-                        && !(LoadoutManager.isSwappingLoadout && LoadoutManager.targetLoadoutSlot == farmingSlot)) {
-                    LoadoutManager.triggerLoadoutSwap(Minecraft.getInstance(), farmingSlot);
-                }
+            if (farmingSlot > 0
+                    && LoadoutManager.trackedLoadoutSlot != farmingSlot
+                    && !(LoadoutManager.isSwappingLoadout
+                            && LoadoutManager.targetLoadoutSlot == farmingSlot)) {
+                LoadoutManager.triggerLoadoutSwap(Minecraft.getInstance(), farmingSlot);
+                requestedBallsackLoadout = true;
             }
         }
-        long triggerAt = System.currentTimeMillis() + Math.max(0L, delayMs);
+
+        long normalizedDelayMs = Math.max(0L, delayMs);
+        long triggerAt = System.currentTimeMillis() + normalizedDelayMs;
         if (pendingChatTrigger == null) {
             pendingChatTrigger = new PendingChatTrigger(plot, Math.max(0, spawnedCount), triggerAt);
-            return;
+        } else {
+            pendingChatTrigger = new PendingChatTrigger(plot,
+                    pendingChatTrigger.spawnedCount + Math.max(0, spawnedCount),
+                    Math.min(pendingChatTrigger.triggerAtMs, triggerAt));
         }
-        pendingChatTrigger = new PendingChatTrigger(plot, pendingChatTrigger.spawnedCount + Math.max(0, spawnedCount), Math.min(pendingChatTrigger.triggerAtMs, triggerAt));
+
+        if (requestedBallsackLoadout) {
+            pendingChatTriggerWaitsForLoadout = true;
+            pendingChatTriggerDelayAfterLoadoutMs = pendingChatTriggerDelayAfterLoadoutMs == 0L
+                    ? normalizedDelayMs
+                    : Math.min(pendingChatTriggerDelayAfterLoadoutMs, normalizedDelayMs);
+        }
     }
 
     private static synchronized boolean processPendingChatTrigger(Minecraft client, MacroState.State currentState) {
@@ -357,11 +374,26 @@ public class PestManager {
         if (pending == null) {
             return false;
         }
+        if (pendingChatTriggerWaitsForLoadout) {
+            if (LoadoutManager.isSwappingLoadout
+                    || !LoadoutManager.loadoutGuiCloseComplete
+                    || currentState != MacroState.State.FARMING) {
+                return false;
+            }
+
+            pendingChatTrigger = new PendingChatTrigger(pending.plot, pending.spawnedCount,
+                    System.currentTimeMillis() + pendingChatTriggerDelayAfterLoadoutMs);
+            pendingChatTriggerWaitsForLoadout = false;
+            pendingChatTriggerDelayAfterLoadoutMs = 0L;
+            return false;
+        }
         if (currentState != MacroState.State.FARMING) {
             if (AetherConfig.BALLSACK_SHREDDER.get() && LoadoutManager.isSwappingLoadout) {
                 return false;
             }
             pendingChatTrigger = null;
+            pendingChatTriggerWaitsForLoadout = false;
+            pendingChatTriggerDelayAfterLoadoutMs = 0L;
             return false;
         }
         if (System.currentTimeMillis() < pending.triggerAtMs) {
@@ -371,6 +403,8 @@ public class PestManager {
             return false;
         }
         pendingChatTrigger = null;
+        pendingChatTriggerWaitsForLoadout = false;
+        pendingChatTriggerDelayAfterLoadoutMs = 0L;
         tryStartCleaningSequenceFromChat(client, pending.plot, pending.spawnedCount);
         return true;
     }

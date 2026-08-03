@@ -125,12 +125,18 @@ final class PestPreStage {
 
         ClientUtils.waitForWardrobeGui();
         long finishWait = System.currentTimeMillis();
-        while (LoadoutManager.isSwappingLoadout && System.currentTimeMillis() - finishWait < 7000) {
+        while ((LoadoutManager.isSwappingLoadout || !LoadoutManager.loadoutGuiCloseComplete)
+                && System.currentTimeMillis() - finishWait < 7000) {
             MacroWorkerThread.sleep(50);
         }
-        if (LoadoutManager.isSwappingLoadout) {
+        if (LoadoutManager.isSwappingLoadout || !LoadoutManager.loadoutGuiCloseComplete) {
             ClientUtils.sendDebugMessage("Loadout swap timed out in pest PRE stage; triggering completion failsafe.");
             LoadoutManager.forceLoadoutCompletionFailsafe(client);
+            long failsafeWait = System.currentTimeMillis();
+            while (!LoadoutManager.loadoutGuiCloseComplete
+                    && System.currentTimeMillis() - failsafeWait < 2000) {
+                MacroWorkerThread.sleep(25);
+            }
         }
 
         while (LoadoutManager.loadoutCleanupTicks > 0) {

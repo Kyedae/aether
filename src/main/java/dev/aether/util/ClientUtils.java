@@ -54,6 +54,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ClientUtils {
+    private static final long GUI_CLOSE_STABILIZATION_MS = 250L;
+    private static final long GUI_CLOSE_POLL_MS = 25L;
     private static final int JACOBS_CONTEST_START_MINUTE_UTC = 15;
     private static final int JACOBS_CONTEST_END_MINUTE_UTC = 35;
     private static final Object SIDEBAR_CACHE_LOCK = new Object();
@@ -74,6 +76,11 @@ public class ClientUtils {
     });
     private static final ScheduledExecutorService INPUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "aether-input-dispatch");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private static final ScheduledExecutorService GUI_CLOSE_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "aether-gui-close");
         thread.setDaemon(true);
         return thread;
     });
@@ -250,6 +257,61 @@ public class ClientUtils {
     public static boolean isInventoryScreenOpen() {
         Minecraft client = Minecraft.getInstance();
         return client != null && client.screen instanceof AbstractContainerScreen<?>;
+    }
+
+    /**
+     * Closes the current GUI and keeps closing any GUI that reappears for the
+     * full stabilization window. Callers may rely on this method not returning
+     * before it is safe to continue with the next action.
+     */
+    public static void closeGui(Minecraft client) {
+        if (client == null) {
+            return;
+        }
+
+        long deadline = System.currentTimeMillis() + GUI_CLOSE_STABILIZATION_MS;
+        boolean interrupted = false;
+        Screen screenBeingClosed = null;
+        while (true) {
+            long remaining = deadline - System.currentTimeMillis();
+            Screen currentScreen = client.screen;
+            if (currentScreen == null) {
+                screenBeingClosed = null;
+            } else if (currentScreen != screenBeingClosed) {
+                screenBeingClosed = currentScreen;
+                Runnable closeAction = () -> {
+                    if (client.player != null && client.screen != null) {
+                        client.player.closeContainer();
+                    } else if (client.screen != null) {
+                        client.setScreen(null);
+                    }
+                };
+
+                if (client.isSameThread()) {
+                    closeAction.run();
+                } else {
+                    client.execute(closeAction);
+                }
+            }
+
+            if (remaining <= 0) {
+                break;
+            }
+
+            try {
+                Thread.sleep(Math.min(GUI_CLOSE_POLL_MS, remaining));
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+            }
+        }
+
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public static CompletableFuture<Void> closeGuiAsync(Minecraft client) {
+        return CompletableFuture.runAsync(() -> closeGui(client), GUI_CLOSE_EXECUTOR);
     }
 
     public static void forceReleaseMovementKeys() {
@@ -846,6 +908,13 @@ public class ClientUtils {
 
     private static void scheduleClientAction(Minecraft client, long delayMs, Runnable action) {
         INPUT_EXECUTOR.schedule(() -> client.execute(action), delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    public static void scheduleClientTask(Minecraft client, long delayMs, Runnable action) {
+        if (client == null || action == null) {
+            return;
+        }
+        scheduleClientAction(client, delayMs, action);
     }
 
     private static InputConstants.Key getBoundKey(KeyMapping mapping) {
