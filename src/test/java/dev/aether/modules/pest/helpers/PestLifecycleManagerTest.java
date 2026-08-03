@@ -19,4 +19,19 @@ class PestLifecycleManagerTest {
         assertFalse(PestLifecycleManager.shouldRetrySetSpawn(
                 PestLifecycleManager.Stage.PRE, 4, 4, false, true));
     }
+
+    @Test
+    void skipsDestroyerWhenBallsackLeavesOneOnTheTargetLeaveOnePlot() {
+        assertTrue(PestLifecycleManager.shouldSkipCleaningAfterBallsack(1, true, false));
+    }
+
+    @Test
+    void doesNotSkipDestroyerForOnePestOnANonLeaveOnePlot() {
+        assertFalse(PestLifecycleManager.shouldSkipCleaningAfterBallsack(1, false, false));
+    }
+
+    @Test
+    void skipsDestroyerWhenBallsackKillsEveryPest() {
+        assertTrue(PestLifecycleManager.shouldSkipCleaningAfterBallsack(0, false, false));
+    }
 }

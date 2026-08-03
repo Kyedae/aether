@@ -183,7 +183,7 @@ public final class PestLifecycleManager {
         }
         if (ballsackResult != null
                 && ballsackResult.measured()
-                && shouldSkipCleaningAfterBallsack(client, ballsackResult.estimatedRemaining())) {
+                && shouldSkipCleaningAfterBallsack(client, plot, ballsackResult.estimatedRemaining())) {
             ClientUtils.sendDebugMessage("Ballsack Shredder: "
                     + ballsackResult.estimatedRemaining()
                     + " pest(s) estimated remaining; skipping CLEANING and entering POST.");
@@ -210,10 +210,22 @@ public final class PestLifecycleManager {
         client.execute(() -> PestDestroyer.start(client, plot));
     }
 
-    static boolean shouldSkipCleaningAfterBallsack(Minecraft client, int estimatedRemaining) {
+    static boolean shouldSkipCleaningAfterBallsack(
+            Minecraft client, String targetPlot, int estimatedRemaining) {
+        boolean targetLeavesOnePest = AetherConfig.LEAVE_ONE_PEST_ALIVE.get()
+                && AetherConfig.LEAVE_ONE_PEST_PLOTS.get().stream()
+                        .map(PestPlotId::normalize)
+                        .anyMatch(PestPlotId.normalize(targetPlot)::equals);
+        return shouldSkipCleaningAfterBallsack(
+                estimatedRemaining,
+                targetLeavesOnePest,
+                PestDestroyer.shouldFinishForAliveCount(client, estimatedRemaining));
+    }
+
+    static boolean shouldSkipCleaningAfterBallsack(
+            int estimatedRemaining, boolean targetLeavesOnePest, boolean rememberedLeavesCanFinish) {
         return estimatedRemaining == 0
-                || estimatedRemaining == 1
-                        && PestDestroyer.shouldFinishForAliveCount(client, estimatedRemaining);
+                || estimatedRemaining == 1 && (targetLeavesOnePest || rememberedLeavesCanFinish);
     }
 
     private static void abortPreStage(Minecraft client, int sessionId) {
