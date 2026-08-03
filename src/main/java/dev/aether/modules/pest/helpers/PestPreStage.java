@@ -32,12 +32,6 @@ final class PestPreStage {
             return Result.failure();
         }
 
-        if (!CommandUtils.setSpawn()) {
-            ClientUtils.sendMessage("\u00A7c[Aether] /setspawn timed out - aborting pest cleaning to prevent roof spawn.",
-                    false);
-            return Result.failure();
-        }
-
         if (AetherConfig.SUNSET_PESTS.get()) {
             if (!PestLifecycleManager.prepareSunsetPestsDaytime(client)) {
                 return Result.failure();
