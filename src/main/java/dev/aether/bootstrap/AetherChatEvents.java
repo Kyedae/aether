@@ -117,6 +117,7 @@ public final class AetherChatEvents {
 
         if (PestDestroyer.isActive()) {
             ClientUtils.sendDebugMessage("[PestDestroyer] Detected 'No Pests' message. Finishing destroyer.");
+            PestDestroyer.clearRememberedLeaveOnePlots();
             PestDestroyer.finish(Minecraft.getInstance());
         }
     }
@@ -223,6 +224,9 @@ public final class AetherChatEvents {
         }
 
         String plot = plotMatcher.group(1);
+        if (lowerText.contains("spawned")) {
+            PestDestroyer.onPestsSpawnedInPlot(plot);
+        }
         int spawnedCount = 0;
         Matcher spawnMatcher = SPAWN_COUNT_PATTERN.matcher(plainText);
         if (spawnMatcher.find()) {

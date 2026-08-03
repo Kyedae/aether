@@ -23,10 +23,8 @@ final class PestTargetController {
             TARGET_REACH_DISTANCE * PRE_TRIGGER_RATIO;
     private static final double PRE_MOVE_MIN_NEXT_DIST = 2.5;
 
-    interface Context {
+    interface Context extends PestLeaveOneController.Context {
         boolean tryLeaveOneOnCurrentPlot(Minecraft client);
-
-        void setState(PestDestroyer.State state);
     }
 
     private PestTargetController() {
@@ -95,7 +93,7 @@ final class PestTargetController {
 
         Entity next = nextQueuedPest(client, runtime);
         if (next == null) {
-            rebuildQueue(client, runtime);
+            rebuildQueue(client, runtime, context);
             next = nextQueuedPest(client, runtime);
         }
         if (next == null) {
@@ -125,9 +123,16 @@ final class PestTargetController {
                 client, runtime.pestTargetQueue, runtime.killedEntities);
     }
 
-    static void rebuildQueue(Minecraft client, PestDestroyerRuntime runtime) {
+    static void rebuildQueue(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context) {
+        updateReservedPest(client, runtime, context);
         PestTargetTracker.rebuildPestTargetQueue(
-                client, runtime.pestTargetQueue, runtime.killedEntities);
+                client,
+                runtime.pestTargetQueue,
+                runtime.killedEntities,
+                runtime.navigation.leaveOneReservedEntityId);
     }
 
     static Entity nextQueuedPest(Minecraft client, PestDestroyerRuntime runtime) {
@@ -135,16 +140,19 @@ final class PestTargetController {
                 client, runtime.pestTargetQueue, runtime.killedEntities);
     }
 
-    static Entity findClosestPest(Minecraft client, PestDestroyerRuntime runtime) {
-        return PestTargetTracker.findClosestPest(client, runtime.killedEntities);
+    static Entity findClosestPest(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context) {
+        updateReservedPest(client, runtime, context);
+        return PestTargetTracker.findClosestPest(
+                client,
+                runtime.killedEntities,
+                runtime.navigation.leaveOneReservedEntityId);
     }
 
     static int countVisiblePestSkulls(Minecraft client) {
         return PestTargetTracker.countVisiblePestSkulls(client);
-    }
-
-    static int countAvailablePests(Minecraft client, PestDestroyerRuntime runtime) {
-        return PestTargetTracker.countAvailablePests(client, runtime.killedEntities);
     }
 
     static boolean hasPestSkullMarkerForTarget(Minecraft client, Entity target) {
@@ -191,7 +199,29 @@ final class PestTargetController {
             return false;
         }
         PestManager.decrementPredictedAliveCount(client);
-        return false;
+        return PestLeaveOneController.recordTrackedKill(client, runtime, context);
+    }
+
+    private static void updateReservedPest(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context) {
+        if (!PestLeaveOneController.isTrackingPlot(
+                runtime, context.getEffectivePlot(client))) {
+            runtime.navigation.leaveOneReservedEntityId = -1;
+            return;
+        }
+        int reservedId = runtime.navigation.leaveOneReservedEntityId;
+        boolean reservedStillAvailable = reservedId != -1
+                && PestTargetTracker.isAvailablePest(
+                        client, runtime.killedEntities, reservedId);
+        Entity reserved = PestTargetTracker.findMostIsolatedPest(
+                client, runtime.killedEntities);
+        if (reserved != null) {
+            runtime.navigation.leaveOneReservedEntityId = reserved.getId();
+        } else if (!reservedStillAvailable) {
+            runtime.navigation.leaveOneReservedEntityId = -1;
+        }
     }
 
     static boolean isLookingAt(Minecraft client, Vec3 targetPosition, float tolerance) {

@@ -22,6 +22,10 @@ final class PestNavigationState {
     CommandUtils.ChatWindow plotTpWindow = null;
     final List<String> plotQueue = new ArrayList<>();
     final Set<String> leaveOneSkippedPlots = ConcurrentHashMap.newKeySet();
+    String leaveOneTrackedPlot = null;
+    int leaveOneRemainingKills = -1;
+    int leaveOneUnbudgetedKills = 0;
+    int leaveOneReservedEntityId = -1;
     int currentPlotIdx = 0;
     String lastTargetPlot = null;
     String trustedPlot = null;
@@ -39,7 +43,10 @@ final class PestNavigationState {
         plotTpSent = false;
         plotTpWindow = null;
         plotQueue.clear();
-        leaveOneSkippedPlots.clear();
+        leaveOneTrackedPlot = null;
+        leaveOneRemainingKills = -1;
+        leaveOneUnbudgetedKills = 0;
+        leaveOneReservedEntityId = -1;
         currentPlotIdx = 0;
         lastTargetPlot = null;
         trustedPlot = null;

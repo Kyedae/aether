@@ -92,6 +92,7 @@ public class PestDestroyer {
             // Fallback to cached value
             infested = PestManager.getCurrentInfestedPlots();
         }
+        infested = PestLeaveOneController.filterSkippedPlots(runtime, infested);
 
         if (PestPlotId.isUsable(initialPlot)) {
             runtime.navigation.plotQueue.add(initialPlot);
@@ -165,6 +166,7 @@ public class PestDestroyer {
     }
 
     public static void reset() {
+        PestLeaveOneController.clearRememberedPlots(runtime);
         runtime.resetAll();
     }
 
@@ -469,6 +471,18 @@ public class PestDestroyer {
 
     static Set<String> filterSkippedInfestedPlots(Set<String> infested) {
         return PestLeaveOneController.filterSkippedPlots(runtime, infested);
+    }
+
+    public static Set<String> filterRememberedLeaveOnePlots(Set<String> infested) {
+        return PestLeaveOneController.filterSkippedPlots(runtime, infested);
+    }
+
+    public static void onPestsSpawnedInPlot(String plot) {
+        PestLeaveOneController.forgetPlot(runtime, plot);
+    }
+
+    public static void clearRememberedLeaveOnePlots() {
+        PestLeaveOneController.clearRememberedPlots(runtime);
     }
 
     private static boolean plotsEqual(String first, String second) {

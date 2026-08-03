@@ -72,7 +72,9 @@ final class PestDestroyerProgressController {
             if (!infested.isEmpty()) {
                 String firstPlot = infested.iterator().next();
                 String currentPlot = context.getEffectivePlot(client);
-                if (!context.plotsEqual(firstPlot, currentPlot)
+                boolean currentStillActionable = infested.stream()
+                        .anyMatch(plot -> context.plotsEqual(plot, currentPlot));
+                if (!currentStillActionable
                         && isImmediatePlotExitState(runtime.state)) {
                     ClientUtils.sendDebugMessage(
                             "[PestDestroyer] Plot "

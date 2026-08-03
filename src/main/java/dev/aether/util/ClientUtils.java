@@ -57,7 +57,7 @@ public class ClientUtils {
     private static final int JACOBS_CONTEST_START_MINUTE_UTC = 15;
     private static final int JACOBS_CONTEST_END_MINUTE_UTC = 35;
     private static final Object SIDEBAR_CACHE_LOCK = new Object();
-    private static final Pattern STRIP_SCOREBOARD_FORMATTING = Pattern.compile("(?i)\u00A7[0-9A-FK-ORZ]");
+    private static final Pattern STRIP_SCOREBOARD_FORMATTING = Pattern.compile("\u00A7.");
     private static final Pattern STRIP_MINECRAFT_FORMATTING = Pattern.compile("(?i)\u00A7[0-9A-FK-ORZ]");
     private static final DateTimeFormatter DEBUG_LOG_FILE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH_mm'.txt'");
     private static final DateTimeFormatter DEBUG_LOG_LINE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");

@@ -274,7 +274,8 @@ public class PestManager {
             return;
         }
 
-        if (isThresholdMet(effectiveAlive)) {
+        Set<String> actionablePlots = PestDestroyer.filterRememberedLeaveOnePlots(data.infestedPlots());
+        if (isThresholdMet(effectiveAlive) && !actionablePlots.isEmpty()) {
             if (isPestReentryCooldownActive()) {
                 return;
             }
@@ -294,9 +295,9 @@ public class PestManager {
             if (effectiveAlive >= 8 && effectiveAlive < 99) {
                 ClientUtils.sendMessage("\u00A7eMax Pests (8) reached. Starting cleaning...", true);
             }
-            setCurrentInfestedPlots(data.infestedPlots());
-            String targetPlot = data.infestedPlots().stream().findFirst().orElse(null);
-            ClientUtils.sendDebugMessage("[PestManager] Tab threshold met. infestedPlots=" + data.infestedPlots()
+            setCurrentInfestedPlots(actionablePlots);
+            String targetPlot = actionablePlots.stream().findFirst().orElse(null);
+            ClientUtils.sendDebugMessage("[PestManager] Tab threshold met. infestedPlots=" + actionablePlots
                             + " targetPlot=" + targetPlot + " currentPlot=" + ClientUtils.getCurrentPlot());
             boolean started = startCleaningSequence(client, targetPlot, effectiveAlive);
             if (started) {
@@ -402,11 +403,13 @@ public class PestManager {
             return false;
         }
 
-        Set<String> candidatePlots = new LinkedHashSet<>(data.infestedPlots());
+        Set<String> candidatePlots = new LinkedHashSet<>();
         String normalizedRequestedPlot = PestPlotId.normalize(requestedPlot);
         if (PestPlotId.isUsable(normalizedRequestedPlot)) {
             candidatePlots.add(normalizedRequestedPlot);
         }
+        candidatePlots.addAll(data.infestedPlots());
+        candidatePlots = PestDestroyer.filterRememberedLeaveOnePlots(candidatePlots);
 
         String targetPlot = candidatePlots.stream()
                 .findFirst()
