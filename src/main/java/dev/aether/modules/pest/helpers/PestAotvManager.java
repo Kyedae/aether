@@ -10,6 +10,7 @@ import net.minecraft.world.phys.Vec3;
 import dev.aether.modules.gear.GearManager;
 import dev.aether.macro.MacroWorkerThread;
 import dev.aether.modules.rotation.RotationManager;
+import dev.aether.modules.failsafe.FailsafeManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -100,7 +101,7 @@ public class PestAotvManager {
     }
 
     public static boolean shouldDoAotvOnCurrentPlot(Minecraft client, String currentInfestedPlot, boolean isSamePlot) {
-        if (!AetherConfig.AOTV_TO_ROOF.get())
+        if (AetherConfig.BALLSACK_SHREDDER.get() || !AetherConfig.AOTV_TO_ROOF.get())
             return false;
 
         if (AetherConfig.AOTV_ROOF_PLOTS.get().isEmpty())
@@ -255,7 +256,9 @@ public class PestAotvManager {
 
         float targetYaw = PestClientThread.call(
                 client, () -> client.player.getYRot() + randomYawOffset(), 0.0f);
-        float targetPitch = (float) (-30.0 + Math.random() * 60.0);
+        float targetPitch = AetherConfig.BALLSACK_SHREDDER.get()
+                ? 90.0f
+                : (float) (-30.0 + Math.random() * 60.0);
         int rotTime = (int) (AetherConfig.ROTATION_TIME.get() * (0.92 + Math.random() * 0.16));
         AtomicBoolean started = new AtomicBoolean(false);
         client.execute(() -> {
@@ -272,6 +275,16 @@ public class PestAotvManager {
         }
         while (started.get() && RotationManager.isRotating() && System.currentTimeMillis() < deadline) {
             MacroWorkerThread.sleep(20);
+        }
+
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            int vacuumSlot = PestLoadoutHelper.findVacuumHotbarSlot(client);
+            if (vacuumSlot >= 0 && vacuumSlot < 9) {
+                PestClientThread.run(client, () -> {
+                    FailsafeManager.selectHotbarSlot(client, vacuumSlot);
+                    ClientUtils.setKeyMappingState(client.options.keyUse, true);
+                });
+            }
         }
     }
 

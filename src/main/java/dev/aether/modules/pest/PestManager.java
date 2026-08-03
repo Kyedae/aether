@@ -335,6 +335,15 @@ public class PestManager {
 
     /** Schedules a chat trigger without blocking the shared worker or farming. */
     public static synchronized void scheduleChatCleaningTrigger(String plot, int spawnedCount, long delayMs) {
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            int farmingSlot = AetherConfig.LOADOUT_SLOT_FARMING.get();
+            if (farmingSlot > 0) {
+                if (LoadoutManager.trackedLoadoutSlot != farmingSlot
+                        && !(LoadoutManager.isSwappingLoadout && LoadoutManager.targetLoadoutSlot == farmingSlot)) {
+                    LoadoutManager.triggerLoadoutSwap(Minecraft.getInstance(), farmingSlot);
+                }
+            }
+        }
         long triggerAt = System.currentTimeMillis() + Math.max(0L, delayMs);
         if (pendingChatTrigger == null) {
             pendingChatTrigger = new PendingChatTrigger(plot, Math.max(0, spawnedCount), triggerAt);
@@ -349,10 +358,16 @@ public class PestManager {
             return false;
         }
         if (currentState != MacroState.State.FARMING) {
+            if (AetherConfig.BALLSACK_SHREDDER.get() && LoadoutManager.isSwappingLoadout) {
+                return false;
+            }
             pendingChatTrigger = null;
             return false;
         }
         if (System.currentTimeMillis() < pending.triggerAtMs) {
+            return false;
+        }
+        if (LoadoutManager.isSwappingLoadout || !MacroStateManager.isMacroRunning()) {
             return false;
         }
         pendingChatTrigger = null;

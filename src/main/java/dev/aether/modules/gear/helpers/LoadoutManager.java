@@ -42,7 +42,7 @@ public class LoadoutManager {
     }
 
     public static void triggerLoadoutSwap(Minecraft client, int slot) {
-        if (trackedLoadoutSlot == slot) {
+        if (trackedLoadoutSlot == slot || (isSwappingLoadout && targetLoadoutSlot == slot)) {
             ClientUtils.sendDebugMessage("Loadout already on target slot, restarting farming");
             client.execute(() -> FarmingMacroManager.disable(client));
             MacroWorkerThread.getInstance().submit("Wardrobe-AlreadyOnSlot-FastResume", () -> {
@@ -99,7 +99,7 @@ public class LoadoutManager {
     }
 
     public static void ensureLoadoutSlot(Minecraft client, int slot) {
-        if (trackedLoadoutSlot == slot) {
+        if (slot <= 0 || trackedLoadoutSlot == slot || (isSwappingLoadout && targetLoadoutSlot == slot)) {
             return;
         }
         targetLoadoutSlot = slot;

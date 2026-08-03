@@ -447,6 +447,9 @@ public final class AetherConfig {
         public static final ListEntry<String> LEAVE_ONE_PEST_PLOTS = Config.list("leaveOnePestPlots",
                         Collections.emptyList(), String.class);
         public static final BooleanEntry SUNSET_PESTS = Config.bool("sunsetPests", false);
+        public static final BooleanEntry BALLSACK_SHREDDER = Config.bool("ballsackShredder", false);
+        public static final IntEntry BALLSACK_LOOK_DOWN_TIME_MS = Config.integer("ballsackLookDownTimeMs", 1000)
+                        .range(0, 3000);
         public static final BooleanEntry PEST_AOTV_BETWEEN = Config.bool("pestAotvBetween", false);
         public static final BooleanEntry PEST_AOTV_CONFIRM_BETWEEN = Config.bool("pestAotvConfirmBetween", false);
         public static final IntEntry PEST_AOTV_DELAY_MIN = Config.integer("pestAotvDelayMin", 150).range(100, 250);

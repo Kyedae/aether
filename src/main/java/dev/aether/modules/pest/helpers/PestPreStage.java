@@ -43,6 +43,9 @@ final class PestPreStage {
             return false;
         }
 
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            return PestBallsackShredder.run(client, sessionId);
+        }
         return moveToRoofIfNeeded(client, plot, sessionId);
     }
 
@@ -61,7 +64,7 @@ final class PestPreStage {
         }
 
         boolean forcePlotTp =
-                alreadyOnPlot && AetherConfig.PEST_PLOT_TP_FOR_CURRENT_PLOT.get();
+                alreadyOnPlot && (AetherConfig.PEST_PLOT_TP_FOR_CURRENT_PLOT.get() || AetherConfig.BALLSACK_SHREDDER.get());
 
         if (alreadyOnPlot && !forcePlotTp) {
             String source = chatMatch ? "chat" : "scoreboard";
