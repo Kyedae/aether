@@ -84,11 +84,14 @@ public final class PestLifecycleManager {
 
         MacroWorkerThread.getInstance().submit("PestPre-" + plot, () -> {
             try {
-                if (!PestPreStage.run(client, plot, sessionId)) {
+                PestPreStage.Result preResult =
+                        PestPreStage.run(client, plot, pestCount, sessionId);
+                if (!preResult.successful()) {
                     abortPreStage(client, sessionId);
                     return;
                 }
-                client.execute(() -> startCleaningStage(client, plot, pestCount, sessionId, manualMode));
+                client.execute(() -> startCleaningStage(
+                        client, plot, pestCount, sessionId, manualMode, preResult));
             } catch (Exception e) {
                 e.printStackTrace();
                 abortPreStage(client, sessionId);
@@ -111,11 +114,30 @@ public final class PestLifecycleManager {
         stage = Stage.IDLE;
     }
 
-    private static void startCleaningStage(Minecraft client, String plot, int pestCount, int sessionId,
-            boolean manualMode) {
+    private static void startCleaningStage(
+            Minecraft client,
+            String plot,
+            int pestCount,
+            int sessionId,
+            boolean manualMode,
+            PestPreStage.Result preResult) {
         if (stage != Stage.PRE
                 || sessionId != PestManager.getCurrentPestSessionId()
                 || !PestManager.isCleaningInProgress()) {
+            return;
+        }
+
+        PestBallsackShredder.Result ballsackResult = preResult.ballsackResult();
+        if (ballsackResult != null && ballsackResult.measured()) {
+            PestManager.decrementPredictedAliveCount(client, ballsackResult.estimatedKilled());
+        }
+        if (ballsackResult != null
+                && ballsackResult.measured()
+                && shouldSkipCleaningAfterBallsack(client, ballsackResult.estimatedRemaining())) {
+            ClientUtils.sendDebugMessage("Ballsack Shredder: "
+                    + ballsackResult.estimatedRemaining()
+                    + " pest(s) estimated remaining; skipping CLEANING and entering POST.");
+            startPostStage(client);
             return;
         }
 
@@ -136,6 +158,12 @@ public final class PestLifecycleManager {
             PestBonusManager.beginReactivation();
         }
         client.execute(() -> PestDestroyer.start(client, plot));
+    }
+
+    static boolean shouldSkipCleaningAfterBallsack(Minecraft client, int estimatedRemaining) {
+        return estimatedRemaining == 0
+                || estimatedRemaining == 1
+                        && PestDestroyer.shouldFinishForAliveCount(client, estimatedRemaining);
     }
 
     private static void abortPreStage(Minecraft client, int sessionId) {

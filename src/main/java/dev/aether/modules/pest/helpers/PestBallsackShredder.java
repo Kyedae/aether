@@ -8,25 +8,36 @@ import dev.aether.modules.pest.PestManager;
 import dev.aether.modules.rotation.RotationManager;
 import dev.aether.util.ClientUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.List;
 
 /** Dedicated pre-cleaning AOTV route used by Ballsack Shredder. */
 final class PestBallsackShredder {
     private static final long AOTV_TIMEOUT_MS = 10_000L;
+    private static final long RESULT_CONFIRM_TIMEOUT_MS = 2_000L;
     private static final double POSITION_CHANGE_DISTANCE_SQR = 1.0;
 
     private PestBallsackShredder() {
     }
 
-    static boolean run(Minecraft client, int sessionId) throws InterruptedException {
+    record Result(boolean successful, boolean measured, int estimatedKilled, int estimatedRemaining) {
+        static Result unmeasured(boolean successful, int startingPests) {
+            return new Result(successful, false, 0, Math.max(0, startingPests));
+        }
+    }
+
+    static Result run(Minecraft client, int sessionId, int startingPests) throws InterruptedException {
         if (client == null || client.player == null || client.options == null) {
-            return false;
+            return Result.unmeasured(false, startingPests);
         }
 
         int aotvSlot = GearManager.findAspectOfTheVoidSlot(client);
         if (aotvSlot < 0 || aotvSlot >= 9) {
             ClientUtils.sendDebugMessage("Ballsack Shredder: no AOTV found; continuing without the route.");
-            return true;
+            return Result.unmeasured(true, startingPests);
         }
 
         // This route intentionally preserves the current aim while firing the AOTV.
@@ -39,16 +50,84 @@ final class PestBallsackShredder {
         int positionChanges = waitForPositionChanges(client, sessionId);
         releaseAotvKeys(client);
         if (shouldAbort(client, sessionId)) {
-            return false;
+            return Result.unmeasured(false, startingPests);
         }
         if (positionChanges < 2) {
             ClientUtils.sendDebugMessage("Ballsack Shredder: AOTV timed out after "
                     + positionChanges + " position change(s); continuing pest cleaning.");
-            return true;
+            return Result.unmeasured(true, startingPests);
         }
 
-        lookDownAndHoldVacuum(client, sessionId);
-        return !shouldAbort(client, sessionId);
+        List<Entity> trackedPests = PestClientThread.call(
+                client,
+                () -> List.copyOf(PestTargetTracker.getLoadedPests(client)),
+                List.of());
+        if (!lookDownAndHoldVacuum(client, sessionId)) {
+            return Result.unmeasured(!shouldAbort(client, sessionId), startingPests);
+        }
+        if (shouldAbort(client, sessionId)) {
+            return Result.unmeasured(false, startingPests);
+        }
+
+        releaseVacuumUse(client);
+        Result result = awaitResultEvidence(
+                client, sessionId, startingPests, trackedPests);
+        int trackedKills = countTrackedKills(trackedPests);
+        int tabRemaining = PestClientThread.call(
+                client,
+                () -> PestManager.getTabAliveCountNow(client),
+                -1);
+        ClientUtils.sendDebugMessage("Ballsack Shredder: estimated killed="
+                + result.estimatedKilled() + ", remaining=" + result.estimatedRemaining()
+                + " (start=" + Math.max(0, startingPests)
+                + ", tracked removals=" + trackedKills
+                + ", tab remaining=" + tabRemaining + ").");
+        return result;
+    }
+
+    private static Result awaitResultEvidence(
+            Minecraft client,
+            int sessionId,
+            int startingPests,
+            List<Entity> trackedPests) throws InterruptedException {
+        Result latest = estimateResult(startingPests, countTrackedKills(trackedPests),
+                PestClientThread.call(client, () -> PestManager.getTabAliveCountNow(client), -1));
+        if (latest.estimatedRemaining() <= 1) {
+            return latest;
+        }
+
+        long deadline = System.currentTimeMillis() + RESULT_CONFIRM_TIMEOUT_MS;
+
+        while (System.currentTimeMillis() < deadline && !shouldAbort(client, sessionId)) {
+            int trackedKills = countTrackedKills(trackedPests);
+            int tabRemaining = PestClientThread.call(
+                    client,
+                    () -> PestManager.getTabAliveCountNow(client),
+                    -1);
+            latest = estimateResult(startingPests, trackedKills, tabRemaining);
+            if (latest.estimatedRemaining() <= 1) {
+                return latest;
+            }
+
+            MacroWorkerThread.sleep(50);
+        }
+        return latest;
+    }
+
+    private static int countTrackedKills(List<Entity> trackedPests) {
+        return (int) trackedPests.stream()
+                .filter(PestBallsackShredder::isDead)
+                .count();
+    }
+
+    static Result estimateResult(int startingPests, int trackedKills, int tabRemaining) {
+        int normalizedStart = Math.max(0, startingPests);
+        int killsFromEntities = Math.min(normalizedStart, Math.max(0, trackedKills));
+        int killsFromTab = tabRemaining < 0
+                ? normalizedStart
+                : Math.max(0, normalizedStart - tabRemaining);
+        int estimatedKilled = Math.max(killsFromEntities, killsFromTab);
+        return new Result(true, true, estimatedKilled, normalizedStart - estimatedKilled);
     }
 
     private static int waitForPositionChanges(Minecraft client, int sessionId) throws InterruptedException {
@@ -71,7 +150,7 @@ final class PestBallsackShredder {
         return changes;
     }
 
-    private static void lookDownAndHoldVacuum(Minecraft client, int sessionId) throws InterruptedException {
+    private static boolean lookDownAndHoldVacuum(Minecraft client, int sessionId) throws InterruptedException {
         PestClientThread.run(client, () -> RotationManager.rotateToYawPitch(
                 client, client.player.getYRot(), 90.0f, AetherConfig.ROTATION_TIME.get(), true));
         long rotationDeadline = System.currentTimeMillis() + AetherConfig.ROTATION_TIME.get() + 1_000L;
@@ -82,7 +161,8 @@ final class PestBallsackShredder {
 
         int vacuumSlot = PestLoadoutHelper.findVacuumHotbarSlot(client);
         if (vacuumSlot < 0 || vacuumSlot >= 9) {
-            return;
+            ClientUtils.sendDebugMessage("Ballsack Shredder: no vacuum found for lookdown; continuing pest cleaning.");
+            return false;
         }
         PestClientThread.run(client, () -> {
             FailsafeManager.selectHotbarSlot(client, vacuumSlot);
@@ -92,6 +172,12 @@ final class PestBallsackShredder {
         while (System.currentTimeMillis() < holdUntil && !shouldAbort(client, sessionId)) {
             MacroWorkerThread.sleep(20);
         }
+        return true;
+    }
+
+    private static boolean isDead(Entity entity) {
+        return entity.isRemoved()
+                || entity instanceof LivingEntity living && living.isDeadOrDying();
     }
 
     private static void releaseAotvKeys(Minecraft client) {
@@ -99,6 +185,11 @@ final class PestBallsackShredder {
             ClientUtils.setKeyMappingState(client.options.keyShift, false);
             ClientUtils.setKeyMappingState(client.options.keyUse, false);
         });
+    }
+
+    private static void releaseVacuumUse(Minecraft client) {
+        PestClientThread.run(client, () ->
+                ClientUtils.setKeyMappingState(client.options.keyUse, false));
     }
 
     private static boolean shouldAbort(Minecraft client, int sessionId) {

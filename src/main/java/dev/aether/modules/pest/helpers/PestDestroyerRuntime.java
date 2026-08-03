@@ -119,6 +119,10 @@ final class PestDestroyerRuntime {
         killVacuumReleaseUntil = 0L;
     }
 
+    boolean claimKilledPestEntityId(int entityId) {
+        return accountedKilledPestEntityIds.add(entityId);
+    }
+
     private void resetTransientState() {
         stuckTicks = 0;
         approachTicks = 0;

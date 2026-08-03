@@ -9,7 +9,11 @@ import dev.aether.util.ClientUtils;
 import dev.aether.util.RotationUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Owns target discovery, queueing, handoff, and kill accounting. */
 final class PestTargetController {
@@ -176,6 +180,60 @@ final class PestTargetController {
         context.setState(PestDestroyer.State.CHECK_NEXT);
     }
 
+    static boolean reconcileTrackedKills(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context) {
+        if (!runtime.active || runtime.state != PestDestroyer.State.KILL_PEST) {
+            return false;
+        }
+
+        Map<Integer, Entity> trackedTargets = new LinkedHashMap<>();
+        if (runtime.currentTarget != null) {
+            trackedTargets.put(runtime.currentTarget.getId(), runtime.currentTarget);
+        }
+        for (Entity queuedTarget : runtime.pestTargetQueue) {
+            trackedTargets.putIfAbsent(queuedTarget.getId(), queuedTarget);
+        }
+
+        int newlyKilled = 0;
+        boolean currentTargetDied = false;
+        for (Entity entity : trackedTargets.values()) {
+            if (!isDead(entity)) {
+                continue;
+            }
+            if (!runtime.killedEntities.contains(entity)) {
+                runtime.killedEntities.add(entity);
+            }
+            if (runtime.claimKilledPestEntityId(entity.getId())) {
+                newlyKilled++;
+            }
+            if (entity == runtime.currentTarget) {
+                currentTargetDied = true;
+            }
+        }
+
+        if (newlyKilled == 0) {
+            return false;
+        }
+
+        runtime.pestTargetQueue.removeIf(PestTargetController::isDead);
+        PestManager.decrementPredictedAliveCount(client, newlyKilled);
+        if (!runtime.active) {
+            return true;
+        }
+
+        if (currentTargetDied) {
+            runtime.currentTarget = null;
+            if (client.options != null) {
+                ClientUtils.setKeyMappingState(client.options.keyUse, false);
+                ClientUtils.setKeyMappingState(client.options.keyDown, false);
+            }
+            context.setState(PestDestroyer.State.CHECK_NEXT);
+        }
+        return true;
+    }
+
     static boolean recordTrackedKill(
             Minecraft client,
             PestDestroyerRuntime runtime,
@@ -187,11 +245,16 @@ final class PestTargetController {
         if (!runtime.killedEntities.contains(entity)) {
             runtime.killedEntities.add(entity);
         }
-        if (!runtime.accountedKilledPestEntityIds.add(entity.getId())) {
+        if (!runtime.claimKilledPestEntityId(entity.getId())) {
             return false;
         }
         PestManager.decrementPredictedAliveCount(client);
-        return false;
+        return !runtime.active;
+    }
+
+    private static boolean isDead(Entity entity) {
+        return entity.isRemoved()
+                || entity instanceof LivingEntity living && living.isDeadOrDying();
     }
 
     static boolean isLookingAt(Minecraft client, Vec3 targetPosition, float tolerance) {

@@ -199,6 +199,11 @@ public class PestDestroyer {
             return;
         }
 
+        if (PestTargetController.reconcileTrackedKills(
+                client, runtime, CONTEXT)) {
+            return;
+        }
+
         if (PestDestroyerProgressController.tick(
                 client, runtime, STUCK_TIMEOUT_MS, CONTEXT)) {
             return;

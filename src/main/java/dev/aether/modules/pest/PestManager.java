@@ -517,10 +517,16 @@ public class PestManager {
     }
 
     public static void decrementPredictedAliveCount(Minecraft client) {
-        if (predictedAliveCount > 0) {
-            predictedAliveCount--;
+        decrementPredictedAliveCount(client, 1);
+    }
+
+    public static synchronized void decrementPredictedAliveCount(Minecraft client, int killedCount) {
+        int appliedKills = Math.min(predictedAliveCount, Math.max(0, killedCount));
+        if (appliedKills > 0) {
+            predictedAliveCount -= appliedKills;
             lastLocalKillUpdateMs = System.currentTimeMillis();
-            ClientUtils.sendDebugMessage("Pest kill detected! Predicted alive: " + predictedAliveCount
+            ClientUtils.sendDebugMessage("Pest kill detected! Count: " + appliedKills
+                            + ", predicted alive: " + predictedAliveCount
                             + ", currentPlot=" + ClientUtils.getCurrentPlot()
                             + ", whitelistedPlots=" + AetherConfig.LEAVE_ONE_PEST_PLOTS.get());
 

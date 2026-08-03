@@ -14,39 +14,53 @@ import net.minecraft.client.Minecraft;
  */
 final class PestPreStage {
 
+    record Result(boolean successful, PestBallsackShredder.Result ballsackResult) {
+        static Result success() {
+            return new Result(true, null);
+        }
+
+        static Result failure() {
+            return new Result(false, null);
+        }
+    }
+
     private PestPreStage() {
     }
 
-    static boolean run(Minecraft client, String plot, int sessionId) throws InterruptedException {
+    static Result run(Minecraft client, String plot, int pestCount, int sessionId) throws InterruptedException {
         if (shouldAbort(client, sessionId)) {
-            return false;
+            return Result.failure();
         }
 
         if (!CommandUtils.setSpawn()) {
             ClientUtils.sendMessage("\u00A7c[Aether] /setspawn timed out - aborting pest cleaning to prevent roof spawn.",
                     false);
-            return false;
+            return Result.failure();
         }
 
         if (AetherConfig.SUNSET_PESTS.get()) {
             if (!PestLifecycleManager.prepareSunsetPestsDaytime(client)) {
-                return false;
+                return Result.failure();
             }
         }
 
         if (!swapToPestLoadout(client, sessionId)) {
-            return false;
+            return Result.failure();
         }
 
         PestPrepSwapManager.clearCycleState();
         if (!moveToTargetPlot(client, plot, sessionId)) {
-            return false;
+            return Result.failure();
         }
 
         if (AetherConfig.BALLSACK_SHREDDER.get()) {
-            return PestBallsackShredder.run(client, sessionId);
+            PestBallsackShredder.Result result =
+                    PestBallsackShredder.run(client, sessionId, pestCount);
+            return new Result(result.successful(), result);
         }
-        return moveToRoofIfNeeded(client, plot, sessionId);
+        return moveToRoofIfNeeded(client, plot, sessionId)
+                ? Result.success()
+                : Result.failure();
     }
 
     private static boolean moveToTargetPlot(Minecraft client, String plot, int sessionId) {
