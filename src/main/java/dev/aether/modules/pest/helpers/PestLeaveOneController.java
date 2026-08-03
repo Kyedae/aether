@@ -7,16 +7,18 @@ import dev.aether.util.ClientUtils;
 import net.minecraft.client.Minecraft;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Encapsulates the optional "leave one pest alive" plot policy. */
 final class PestLeaveOneController {
+    private static final Pattern PLOT_PEST_COUNT =
+            Pattern.compile("(?i)\\bplot\\s*[-:#]?\\s*(\\d+)\\D+?x\\s*(\\d+)\\b");
+
     interface Context {
         String getEffectivePlot(Minecraft client);
-
-        int countAvailablePests(Minecraft client);
-
-        int countVisiblePestSkulls(Minecraft client);
 
         void setState(PestDestroyer.State state);
     }
@@ -32,25 +34,16 @@ final class PestLeaveOneController {
             return false;
         }
         if (aliveCount == 0) {
+            runtime.navigation.leaveOneSkippedPlots.clear();
             return true;
         }
         if (!AetherConfig.LEAVE_ONE_PEST_ALIVE.get()) {
+            resetTracking(runtime);
             return false;
         }
-
-        Set<String> leaveOnePlots =
-                new LinkedHashSet<>(runtime.navigation.leaveOneSkippedPlots);
-        for (String plot : PestManager.getInfestedPlotsFromTab(client)) {
-            String normalized = PestPlotId.normalize(plot);
-            if (runtime.navigation.leaveOneSkippedPlots.contains(normalized)) {
-                continue;
-            }
-            if (!isWhitelistedPlot(plot)) {
-                return false;
-            }
-            leaveOnePlots.add(normalized);
-        }
-        return !leaveOnePlots.isEmpty() && aliveCount <= leaveOnePlots.size();
+        pruneRememberedPlots(runtime);
+        return shouldFinishForCounts(
+                aliveCount, runtime.navigation.leaveOneSkippedPlots.size());
     }
 
     static boolean tryLeaveCurrentPlot(
@@ -63,6 +56,7 @@ final class PestLeaveOneController {
 
         String currentPlot = context.getEffectivePlot(client);
         if (!isWhitelistedPlot(currentPlot)) {
+            resetTracking(runtime);
             return false;
         }
 
@@ -71,32 +65,64 @@ final class PestLeaveOneController {
             return false;
         }
 
-        int localPests = Math.max(
-                context.countAvailablePests(client),
-                context.countVisiblePestSkulls(client));
-        int aliveNow = PestManager.getEffectiveAliveCountNow(client);
-        boolean hasLocalEvidence = localPests > 0 || !runtime.killedEntities.isEmpty();
-        boolean shouldSkip = localPests == 1
-                || (aliveNow == 1
-                        && hasOnlyCurrentActivePlot(client, runtime, currentPlot)
-                        && (hasLocalEvidence
-                                || PestCompletionGuard.isStartupGraceElapsed(runtime.activatedAt)));
-        if (!shouldSkip) {
-            return false;
+        int plotPests = parsePlotPestCount(ClientUtils.getSidebarLines(), currentPlot);
+        if (!normalized.equals(runtime.navigation.leaveOneTrackedPlot)) {
+            runtime.navigation.leaveOneTrackedPlot = normalized;
+            runtime.navigation.leaveOneRemainingKills = -1;
+            runtime.navigation.leaveOneUnbudgetedKills = 0;
+            runtime.navigation.leaveOneReservedEntityId = -1;
+        }
+        if (runtime.navigation.leaveOneRemainingKills < 0 && plotPests > 0) {
+            runtime.navigation.leaveOneRemainingKills = remainingKillBudget(
+                    plotPests, runtime.navigation.leaveOneUnbudgetedKills);
+            ClientUtils.sendDebugMessage(
+                    "PestDestroyer: Plot "
+                            + currentPlot
+                            + " leave-one kill budget is "
+                            + runtime.navigation.leaveOneRemainingKills
+                            + " after "
+                            + runtime.navigation.leaveOneUnbudgetedKills
+                            + " early kill(s).");
         }
 
-        runtime.navigation.leaveOneSkippedPlots.add(normalized);
-        ClientUtils.sendDebugMessage(
-                "PestDestroyer: leaving one pest alive on whitelisted plot "
-                        + currentPlot
-                        + ".");
-        moveToNextActivePlotOrFinish(client, runtime, context);
-        return true;
+        return (plotPests == 1 || runtime.navigation.leaveOneRemainingKills == 0)
+                && finishCurrentPlot(client, runtime, context, currentPlot);
+    }
+
+    static boolean recordTrackedKill(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context) {
+        String currentPlot = context.getEffectivePlot(client);
+        if (!isWhitelistedPlot(currentPlot)) {
+            return false;
+        }
+        String normalized = PestPlotId.normalize(currentPlot);
+        if (!normalized.equals(runtime.navigation.leaveOneTrackedPlot)) {
+            runtime.navigation.leaveOneTrackedPlot = normalized;
+            runtime.navigation.leaveOneRemainingKills = -1;
+            runtime.navigation.leaveOneUnbudgetedKills = 0;
+            runtime.navigation.leaveOneReservedEntityId = -1;
+        }
+        if (runtime.navigation.leaveOneRemainingKills < 0) {
+            runtime.navigation.leaveOneUnbudgetedKills++;
+            return false;
+        }
+        runtime.navigation.leaveOneRemainingKills =
+                consumeKillBudget(runtime.navigation.leaveOneRemainingKills);
+        return runtime.navigation.leaveOneRemainingKills == 0
+                && finishCurrentPlot(client, runtime, context, currentPlot);
+    }
+
+    static boolean isTrackingPlot(PestDestroyerRuntime runtime, String plot) {
+        return runtime.navigation.leaveOneRemainingKills >= 0
+                && PestPlotId.equals(runtime.navigation.leaveOneTrackedPlot, plot);
     }
 
     static Set<String> filterSkippedPlots(
             PestDestroyerRuntime runtime,
             Set<String> infested) {
+        pruneRememberedPlots(runtime);
         Set<String> filtered = new LinkedHashSet<>();
         for (String plot : infested) {
             if (!runtime.navigation.leaveOneSkippedPlots.contains(PestPlotId.normalize(plot))) {
@@ -104,6 +130,61 @@ final class PestLeaveOneController {
             }
         }
         return filtered;
+    }
+
+    static void forgetPlot(PestDestroyerRuntime runtime, String plot) {
+        String normalized = PestPlotId.normalize(plot);
+        runtime.navigation.leaveOneSkippedPlots.remove(normalized);
+        if (normalized.equals(runtime.navigation.leaveOneTrackedPlot)) {
+            resetTracking(runtime);
+        }
+    }
+
+    static void clearRememberedPlots(PestDestroyerRuntime runtime) {
+        runtime.navigation.leaveOneSkippedPlots.clear();
+        resetTracking(runtime);
+    }
+
+    static boolean shouldFinishForCounts(int aliveCount, int rememberedPlotCount) {
+        return aliveCount == 0 || rememberedPlotCount > 0 && aliveCount <= rememberedPlotCount;
+    }
+
+    static int parsePlotPestCount(List<String> lines, String plot) {
+        String normalizedPlot = PestPlotId.normalize(plot);
+        for (String line : lines) {
+            Matcher matcher = PLOT_PEST_COUNT.matcher(line);
+            if (matcher.find() && PestPlotId.normalize(matcher.group(1)).equals(normalizedPlot)) {
+                return Integer.parseInt(matcher.group(2));
+            }
+        }
+        return -1;
+    }
+
+    static int killBudgetForCount(int pestCount) {
+        return pestCount > 0 ? pestCount - 1 : -1;
+    }
+
+    static int consumeKillBudget(int remainingKills) {
+        return remainingKills > 0 ? remainingKills - 1 : remainingKills;
+    }
+
+    static int remainingKillBudget(int pestCount, int earlyKills) {
+        return Math.max(0, killBudgetForCount(pestCount) - Math.max(0, earlyKills));
+    }
+
+    private static boolean finishCurrentPlot(
+            Minecraft client,
+            PestDestroyerRuntime runtime,
+            Context context,
+            String currentPlot) {
+        runtime.navigation.leaveOneSkippedPlots.add(PestPlotId.normalize(currentPlot));
+        resetTracking(runtime);
+        ClientUtils.sendDebugMessage(
+                "PestDestroyer: leaving one pest alive on whitelisted plot "
+                        + currentPlot
+                        + ".");
+        moveToNextActivePlotOrFinish(client, runtime, context);
+        return true;
     }
 
     private static void moveToNextActivePlotOrFinish(
@@ -148,15 +229,24 @@ final class PestLeaveOneController {
         context.setState(PestDestroyer.State.CHECK_NEXT);
     }
 
-    private static boolean hasOnlyCurrentActivePlot(
-            Minecraft client,
-            PestDestroyerRuntime runtime,
-            String currentPlot) {
-        Set<String> active = filterSkippedPlots(
-                runtime,
-                PestManager.getInfestedPlotsFromTab(client));
-        return active.size() == 1
-                && PestPlotId.equals(active.iterator().next(), currentPlot);
+    private static void pruneRememberedPlots(PestDestroyerRuntime runtime) {
+        if (!AetherConfig.LEAVE_ONE_PEST_ALIVE.get()) {
+            runtime.navigation.leaveOneSkippedPlots.clear();
+            resetTracking(runtime);
+            return;
+        }
+        Set<String> configured = new LinkedHashSet<>();
+        for (String plot : AetherConfig.LEAVE_ONE_PEST_PLOTS.get()) {
+            configured.add(PestPlotId.normalize(plot));
+        }
+        runtime.navigation.leaveOneSkippedPlots.retainAll(configured);
+    }
+
+    private static void resetTracking(PestDestroyerRuntime runtime) {
+        runtime.navigation.leaveOneTrackedPlot = null;
+        runtime.navigation.leaveOneRemainingKills = -1;
+        runtime.navigation.leaveOneUnbudgetedKills = 0;
+        runtime.navigation.leaveOneReservedEntityId = -1;
     }
 
     private static boolean isWhitelistedPlot(String plot) {

@@ -37,7 +37,7 @@ final class PestHuntController {
 
         Entity pest = PestTargetController.nextQueuedPest(client, runtime);
         if (pest == null) {
-            PestTargetController.rebuildQueue(client, runtime);
+            PestTargetController.rebuildQueue(client, runtime, targetContext);
             pest = PestTargetController.nextQueuedPest(client, runtime);
         }
         if (pest != null) {
@@ -69,10 +69,16 @@ final class PestHuntController {
         }
 
         runtime.navigation.plotQueue.clear();
-        runtime.navigation.plotQueue.addAll(infested);
-        String firstPlot = runtime.navigation.plotQueue.getFirst();
         String currentPlot =
                 PestPlotNavigator.getEffectivePlot(client, runtime.navigation);
+        infested.stream()
+                .filter(plot -> PestPlotId.equals(plot, currentPlot))
+                .findFirst()
+                .ifPresent(runtime.navigation.plotQueue::add);
+        infested.stream()
+                .filter(plot -> !PestPlotId.equals(plot, currentPlot))
+                .forEach(runtime.navigation.plotQueue::add);
+        String firstPlot = runtime.navigation.plotQueue.getFirst();
 
         if (!PestPlotId.equals(firstPlot, currentPlot)) {
             runtime.navigation.currentPlotIdx = 0;

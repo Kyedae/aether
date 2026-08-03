@@ -17,8 +17,7 @@ final class PestDestroyerCoordinatorContext
                 PestHuntController.Context,
                 PestNavigationCoordinator.Context,
                 PestCombatCoordinator.Context,
-                PestDestroyerProgressController.Context,
-                PestLeaveOneController.Context {
+                PestDestroyerProgressController.Context {
     private final PestDestroyerRuntime runtime;
 
     PestDestroyerCoordinatorContext(PestDestroyerRuntime runtime) {
@@ -97,7 +96,7 @@ final class PestDestroyerCoordinatorContext
 
     @Override
     public Entity findClosestPest(Minecraft client) {
-        return PestTargetController.findClosestPest(client, runtime);
+        return PestTargetController.findClosestPest(client, runtime, this);
     }
 
     @Override
@@ -108,11 +107,6 @@ final class PestDestroyerCoordinatorContext
     @Override
     public int countVisiblePestSkulls(Minecraft client) {
         return PestTargetController.countVisiblePestSkulls(client);
-    }
-
-    @Override
-    public int countAvailablePests(Minecraft client) {
-        return PestTargetController.countAvailablePests(client, runtime);
     }
 
     @Override
