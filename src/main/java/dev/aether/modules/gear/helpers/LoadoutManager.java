@@ -89,7 +89,7 @@ public class LoadoutManager {
             if (MacroWorkerThread.shouldAbortTask(client)) {
                 return;
             }
-            MacroWorkerThread.sleep(375);
+            MacroWorkerThread.sleep(400);
             if (MacroWorkerThread.shouldAbortTask(client)) {
                 return;
             }
