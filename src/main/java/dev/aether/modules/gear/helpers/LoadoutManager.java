@@ -25,7 +25,9 @@ public class LoadoutManager {
     public static volatile long loadoutOpenPendingTime = 0;
     public static volatile long loadoutFirstClickDelayMs = 0;
     public static volatile boolean loadoutGuiDetected = false;
+    public static volatile boolean loadoutGuiCloseComplete = true;
     public static volatile long loadoutTimelineStartTime = 0;
+    private static volatile long loadoutRequestId = 0;
 
     public static void resetState() {
         isSwappingLoadout = false;
@@ -36,12 +38,18 @@ public class LoadoutManager {
         loadoutInteractionTime = 0;
         loadoutInteractionStage = 0;
         loadoutGuiDetected = false;
+        loadoutGuiCloseComplete = true;
+        loadoutRequestId++;
         loadoutOpenPendingTime = 0;
         loadoutFirstClickDelayMs = 0;
         loadoutTimelineStartTime = 0;
     }
 
     public static void triggerLoadoutSwap(Minecraft client, int slot) {
+        if (isSwappingLoadout && targetLoadoutSlot == slot) {
+            ClientUtils.sendDebugMessage("Loadout swap to slot " + slot + " is already pending.");
+            return;
+        }
         if (trackedLoadoutSlot == slot) {
             ClientUtils.sendDebugMessage("Loadout already on target slot, restarting farming");
             client.execute(() -> FarmingMacroManager.disable(client));
@@ -74,8 +82,10 @@ public class LoadoutManager {
         }
 
         targetLoadoutSlot = slot;
+        long requestId = ++loadoutRequestId;
         isSwappingLoadout = true;
         loadoutGuiDetected = false;
+        loadoutGuiCloseComplete = false;
         loadoutInteractionTime = 0;
         loadoutInteractionStage = 0;
         loadoutTimelineStartTime = 0;
@@ -85,26 +95,22 @@ public class LoadoutManager {
         MacroStateManager.setCurrentState(MacroState.State.WARDROBE);
         ClientUtils.sendDebugMessage("Triggering loadout swap to slot " + slot);
         client.execute(() -> FarmingMacroManager.disable(client));
-        MacroWorkerThread.getInstance().submit("Loadout-OpenGui", () -> {
-            if (MacroWorkerThread.shouldAbortTask(client)) {
-                return;
+        ClientUtils.scheduleClientTask(client, 400L, () -> {
+            if (isSwappingLoadout && targetLoadoutSlot == slot && loadoutRequestId == requestId) {
+                ClientUtils.sendCommand("/loadout");
             }
-            MacroWorkerThread.sleep(375);
-            if (MacroWorkerThread.shouldAbortTask(client)) {
-                return;
-            }
-            client.execute(() -> ClientUtils.sendCommand("/loadout"));
-            ClientUtils.waitForWardrobeGui();
         });
     }
 
     public static void ensureLoadoutSlot(Minecraft client, int slot) {
-        if (trackedLoadoutSlot == slot) {
+        if (slot <= 0 || trackedLoadoutSlot == slot || (isSwappingLoadout && targetLoadoutSlot == slot)) {
             return;
         }
         targetLoadoutSlot = slot;
+        loadoutRequestId++;
         isSwappingLoadout = true;
         loadoutGuiDetected = false;
+        loadoutGuiCloseComplete = false;
         loadoutInteractionTime = 0;
         loadoutInteractionStage = 0;
         loadoutTimelineStartTime = 0;
@@ -121,6 +127,7 @@ public class LoadoutManager {
         isSwappingLoadout = false;
         shouldRestartFarmingAfterSwap = false;
         loadoutGuiDetected = false;
+        loadoutGuiCloseComplete = false;
         loadoutInteractionTime = 0;
         loadoutInteractionStage = 0;
         loadoutTimelineStartTime = 0;
@@ -132,9 +139,8 @@ public class LoadoutManager {
         }
 
         ClientUtils.sendDebugMessage("Aborted loadout swap because " + taskName + " has priority.");
-        if (client.player != null) {
-            client.execute(() -> client.player.closeContainer());
-        }
+        ClientUtils.closeGui(client);
+        loadoutGuiCloseComplete = true;
     }
 
     public static void handleLoadoutMenu(Minecraft client, AbstractContainerScreen<?> screen) {
@@ -202,13 +208,13 @@ public class LoadoutManager {
         loadoutOpenPendingTime = 0;
         loadoutFirstClickDelayMs = 0;
 
-        if (client.player != null) {
-            sendTimedDebug(client, "Loadout GUI close requested", now);
-            client.player.closeContainer();
-        }
-
-        sendTimedDebug(client, "Loadout swap complete. Active slot is now " + trackedLoadoutSlot, now);
-        handleLoadoutCompletion(client);
+        sendTimedDebug(client, "Loadout GUI close requested", now);
+        ClientUtils.closeGuiAsync(client).thenRun(() -> {
+            loadoutGuiCloseComplete = true;
+            sendTimedDebug(client, "Loadout swap complete. Active slot is now " + trackedLoadoutSlot,
+                    System.currentTimeMillis());
+            handleLoadoutCompletion(client);
+        });
     }
 
     private static void handleLoadoutCompletion(Minecraft client) {
@@ -260,7 +266,10 @@ public class LoadoutManager {
             loadoutInteractionStage = 0;
             loadoutOpenPendingTime = 0;
             loadoutFirstClickDelayMs = 0;
-            handleLoadoutCompletion(client);
+            ClientUtils.closeGuiAsync(client).thenRun(() -> {
+                loadoutGuiCloseComplete = true;
+                handleLoadoutCompletion(client);
+            });
         }
     }
 

@@ -189,7 +189,9 @@ final class PestCombatCoordinator {
         if (currentTarget == null || currentTarget.isRemoved() || (currentTarget instanceof LivingEntity le && le.isDeadOrDying())) {
             ClientUtils.setKeyMappingState(client.options.keyUse, false);
             if (currentTarget != null && (currentTarget.isRemoved() || (currentTarget instanceof LivingEntity le2 && le2.isDeadOrDying()))) {
-                context.recordTrackedPestKill(client, currentTarget);
+                if (context.recordTrackedPestKill(client, currentTarget)) {
+                    return;
+                }
             }
             context.setState(PestDestroyer.State.CHECK_NEXT);
             return;
@@ -255,7 +257,9 @@ final class PestCombatCoordinator {
                     ClientUtils.setKeyMappingState(client.options.keyUse, false);
                     ClientUtils.setKeyMappingState(client.options.keyDown, false);
                     context.markKilled(currentTarget);
-                    context.recordTrackedPestKill(client, currentTarget);
+                    if (context.recordTrackedPestKill(client, currentTarget)) {
+                        return;
+                    }
                     ClientUtils.sendDebugMessage("[PestDestroyer] Pest skull disappeared. Switching target immediately.");
                     if (!context.switchToNextQueuedTarget(client)) {
                         context.setState(PestDestroyer.State.CHECK_NEXT);

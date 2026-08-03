@@ -118,7 +118,6 @@ public final class HumanizationRegistryProvider extends AbstractModulesRegistryP
                         "Angle ranges and target tolerance settings")
                 .add(FarmingSettingsFactory.farmingPitchRangeSetting())
                 .add(FarmingSettingsFactory.farmingYawRangeSetting())
-                .add(FarmingSettingsFactory.aotvToRoofPitchRangeSetting())
                 .add(FarmingSettingsFactory.pestFovRangeSetting())
                 .add(FarmingSettingsFactory.pestAboveAimPitchRangeSetting())
                 .add(FarmingSettingsFactory.visitorFovRangeSetting())

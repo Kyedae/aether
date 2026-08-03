@@ -21,6 +21,7 @@ import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.IdentityHashMap;
 import java.util.function.Predicate;
 
 public final class PestTargetTracker {
@@ -79,10 +80,21 @@ public final class PestTargetTracker {
     static void rebuildPestTargetQueue(
             Minecraft client,
             Deque<Entity> pestTargetQueue,
-            Collection<Entity> killedEntities
+            Collection<Entity> killedEntities,
+            int reservedEntityId
     ) {
         List<Entity> pests = availableTargets(client, killedEntities);
-        if (client.player != null) {
+        if (reservedEntityId != -1) {
+            Map<Entity, Double> nearestNeighborDistances = new IdentityHashMap<>();
+            List<Vec3> positions = pests.stream().map(Entity::position).toList();
+            for (int i = 0; i < pests.size(); i++) {
+                nearestNeighborDistances.put(pests.get(i), nearestNeighborDistanceSqr(i, positions));
+            }
+            pests.removeIf(pest -> pest.getId() == reservedEntityId);
+            pests.sort(Comparator
+                    .comparingDouble((Entity pest) -> nearestNeighborDistances.get(pest))
+                    .thenComparingDouble(client.player::distanceToSqr));
+        } else if (client.player != null) {
             pests.sort(Comparator.comparingDouble(client.player::distanceToSqr));
         }
         pestTargetQueue.clear();
@@ -93,16 +105,16 @@ public final class PestTargetTracker {
         }
     }
 
-    static int countAvailablePests(Minecraft client, Collection<Entity> killedEntities) {
-        return availableTargets(client, killedEntities).size();
-    }
-
-    static Entity findClosestPest(Minecraft client, Collection<Entity> killedEntities) {
+    static Entity findClosestPest(
+            Minecraft client,
+            Collection<Entity> killedEntities,
+            int reservedEntityId) {
         if (client == null || client.player == null) {
             return null;
         }
         List<Entity> targets = availableTargets(client, killedEntities);
         Entity closest = targets.stream()
+                .filter(target -> target.getId() != reservedEntityId)
                 .min(Comparator.comparingDouble(client.player::distanceToSqr))
                 .orElse(null);
         PestSnapshot snapshot = snapshot(client);
@@ -110,6 +122,47 @@ public final class PestTargetTracker {
                 + " entities, " + snapshot.markers().size() + " pest markers, "
                 + targets.size() + " available pests");
         return closest;
+    }
+
+    static Entity findMostIsolatedPest(Minecraft client, Collection<Entity> killedEntities) {
+        List<Entity> pests = availableTargets(client, killedEntities);
+        if (pests.size() < 2) {
+            return null;
+        }
+        List<Vec3> positions = pests.stream().map(Entity::position).toList();
+        return pests.get(mostIsolatedIndex(positions));
+    }
+
+    static boolean isAvailablePest(
+            Minecraft client,
+            Collection<Entity> killedEntities,
+            int entityId) {
+        return availableTargets(client, killedEntities).stream()
+                .anyMatch(pest -> pest.getId() == entityId);
+    }
+
+    // ponytail: O(n^2) is simpler and pests are single-digit; spatial indexing only if that ceiling changes.
+    static int mostIsolatedIndex(List<Vec3> positions) {
+        int mostIsolated = -1;
+        double bestDistance = -1.0;
+        for (int i = 0; i < positions.size(); i++) {
+            double distance = nearestNeighborDistanceSqr(i, positions);
+            if (distance > bestDistance) {
+                bestDistance = distance;
+                mostIsolated = i;
+            }
+        }
+        return mostIsolated;
+    }
+
+    private static double nearestNeighborDistanceSqr(int index, List<Vec3> positions) {
+        double nearest = Double.MAX_VALUE;
+        for (int i = 0; i < positions.size(); i++) {
+            if (i != index) {
+                nearest = Math.min(nearest, positions.get(index).distanceToSqr(positions.get(i)));
+            }
+        }
+        return nearest;
     }
 
     static boolean hasPestArmorStandNearby(Minecraft client, Entity targetEntity) {

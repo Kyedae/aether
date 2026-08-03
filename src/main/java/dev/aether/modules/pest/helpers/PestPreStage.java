@@ -14,36 +14,47 @@ import net.minecraft.client.Minecraft;
  */
 final class PestPreStage {
 
+    record Result(boolean successful, PestBallsackShredder.Result ballsackResult) {
+        static Result success() {
+            return new Result(true, null);
+        }
+
+        static Result failure() {
+            return new Result(false, null);
+        }
+    }
+
     private PestPreStage() {
     }
 
-    static boolean run(Minecraft client, String plot, int sessionId) throws InterruptedException {
+    static Result run(Minecraft client, String plot, int pestCount, int sessionId) throws InterruptedException {
         if (shouldAbort(client, sessionId)) {
-            return false;
-        }
-
-        if (!CommandUtils.setSpawn()) {
-            ClientUtils.sendMessage("\u00A7c[Aether] /setspawn timed out - aborting pest cleaning to prevent roof spawn.",
-                    false);
-            return false;
+            return Result.failure();
         }
 
         if (AetherConfig.SUNSET_PESTS.get()) {
             if (!PestLifecycleManager.prepareSunsetPestsDaytime(client)) {
-                return false;
+                return Result.failure();
             }
         }
 
         if (!swapToPestLoadout(client, sessionId)) {
-            return false;
+            return Result.failure();
         }
 
         PestPrepSwapManager.clearCycleState();
         if (!moveToTargetPlot(client, plot, sessionId)) {
-            return false;
+            return Result.failure();
         }
 
-        return moveToRoofIfNeeded(client, plot, sessionId);
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            PestBallsackShredder.Result result =
+                    PestBallsackShredder.run(client, sessionId, pestCount);
+            return new Result(result.successful(), result);
+        }
+        return moveToRoofIfNeeded(client, plot, sessionId)
+                ? Result.success()
+                : Result.failure();
     }
 
     private static boolean moveToTargetPlot(Minecraft client, String plot, int sessionId) {
@@ -61,7 +72,7 @@ final class PestPreStage {
         }
 
         boolean forcePlotTp =
-                alreadyOnPlot && AetherConfig.PEST_PLOT_TP_FOR_CURRENT_PLOT.get();
+                alreadyOnPlot && (AetherConfig.PEST_PLOT_TP_FOR_CURRENT_PLOT.get() || AetherConfig.BALLSACK_SHREDDER.get());
 
         if (alreadyOnPlot && !forcePlotTp) {
             String source = chatMatch ? "chat" : "scoreboard";
@@ -122,12 +133,18 @@ final class PestPreStage {
 
         ClientUtils.waitForWardrobeGui();
         long finishWait = System.currentTimeMillis();
-        while (LoadoutManager.isSwappingLoadout && System.currentTimeMillis() - finishWait < 7000) {
+        while ((LoadoutManager.isSwappingLoadout || !LoadoutManager.loadoutGuiCloseComplete)
+                && System.currentTimeMillis() - finishWait < 7000) {
             MacroWorkerThread.sleep(50);
         }
-        if (LoadoutManager.isSwappingLoadout) {
+        if (LoadoutManager.isSwappingLoadout || !LoadoutManager.loadoutGuiCloseComplete) {
             ClientUtils.sendDebugMessage("Loadout swap timed out in pest PRE stage; triggering completion failsafe.");
             LoadoutManager.forceLoadoutCompletionFailsafe(client);
+            long failsafeWait = System.currentTimeMillis();
+            while (!LoadoutManager.loadoutGuiCloseComplete
+                    && System.currentTimeMillis() - failsafeWait < 2000) {
+                MacroWorkerThread.sleep(25);
+            }
         }
 
         while (LoadoutManager.loadoutCleanupTicks > 0) {

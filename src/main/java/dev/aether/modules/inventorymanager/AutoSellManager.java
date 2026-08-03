@@ -43,6 +43,7 @@ public class AutoSellManager {
     }
 
     public static void cancel(Minecraft client) {
+        boolean autoSellWasActive = isSelling || isPreparingToSell || isTriggeredBeforeVisitors;
         cancelRequested = true;
         isSelling = false;
         isPreparingToSell = false;
@@ -50,12 +51,8 @@ public class AutoSellManager {
         thresholdMetStartTime = 0;
         awaitingFirstGuiClick = false;
         interactionTime = 0;
-        if (client != null) {
-            client.execute(() -> {
-                if (client.player != null && client.screen != null) {
-                    client.player.closeContainer();
-                }
-            });
+        if (client != null && autoSellWasActive) {
+            ClientUtils.closeGui(client);
         }
     }
 
@@ -302,12 +299,7 @@ public class AutoSellManager {
                 isSelling = true;
                 interactionTime = System.currentTimeMillis();
                 awaitingFirstGuiClick = true;
-                client.execute(() -> {
-                    if (client.player != null && client.screen != null) {
-                        client.player.closeContainer();
-                    }
-                });
-                MacroWorkerThread.sleep(200);
+                ClientUtils.closeGui(client);
                 ClientUtils.sendCommand("/boostercookie");
 
                 while (isSelling && !shouldAbort()) {
@@ -472,9 +464,7 @@ public class AutoSellManager {
     }
 
     public static void finishSelling(Minecraft client) {
-        if (client.player != null && client.screen != null) {
-            client.player.closeContainer();
-        }
+        ClientUtils.closeGui(client);
         isSelling = false;
     }
 }

@@ -117,6 +117,7 @@ public final class AetherChatEvents {
 
         if (PestDestroyer.isActive()) {
             ClientUtils.sendDebugMessage("[PestDestroyer] Detected 'No Pests' message. Finishing destroyer.");
+            PestDestroyer.clearRememberedLeaveOnePlots();
             PestDestroyer.finish(Minecraft.getInstance());
         }
     }
@@ -223,6 +224,9 @@ public final class AetherChatEvents {
         }
 
         String plot = plotMatcher.group(1);
+        if (lowerText.contains("spawned")) {
+            PestDestroyer.onPestsSpawnedInPlot(plot);
+        }
         int spawnedCount = 0;
         Matcher spawnMatcher = SPAWN_COUNT_PATTERN.matcher(plainText);
         if (spawnMatcher.find()) {
@@ -234,23 +238,10 @@ public final class AetherChatEvents {
         }
 
         final int parsedSpawnedCount = spawnedCount;
-        MacroWorkerThread.getInstance().submit("PestClean-ChatTrigger-" + plot, () -> {
-            if (MacroWorkerThread.shouldAbortTask(Minecraft.getInstance(), MacroState.State.FARMING)) {
-                return;
-            }
-
-            int triggerDelay = ConfigHelpers.getRandomizedDelay(
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get(),
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get());
-            if (triggerDelay > 0) {
-                MacroWorkerThread.sleep(triggerDelay);
-                if (MacroWorkerThread.shouldAbortTask(Minecraft.getInstance(), MacroState.State.FARMING)) {
-                    return;
-                }
-            }
-
-            PestManager.tryStartCleaningSequenceFromChat(Minecraft.getInstance(), plot, parsedSpawnedCount);
-        });
+        int triggerDelay = ConfigHelpers.getRandomizedDelay(
+                AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get(),
+                AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get());
+        PestManager.scheduleChatCleaningTrigger(plot, parsedSpawnedCount, triggerDelay);
     }
 
     private static void handleStashState(String lowerText) {

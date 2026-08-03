@@ -52,13 +52,15 @@ final class FarmingSettingsFactory {
     }
 
     static RangeSliderSetting pestDestroyerTriggerDelaySetting() {
-        return intDelayRangeSetting("Pest Destroyer Trigger Delay", 0f, 5000f,
-                () -> AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get(),
-                () -> AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get(),
-                (min, max) -> {
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.set(min);
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.set(max);
-                });
+        return new RangeSliderSetting("Pest Destroyer Trigger Delay", 0f, 30f,
+                () -> AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get() / 1000f,
+                () -> AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get() / 1000f,
+                (lower, upper) -> {
+                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.set(Math.round(lower * 1000f));
+                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.set(Math.round(upper * 1000f));
+                    AetherConfig.save();
+                })
+                .withDecimals(1).withSuffix("s");
     }
 
     static RangeSliderSetting pestExchangeDelaySetting() {
@@ -200,11 +202,17 @@ final class FarmingSettingsFactory {
                 .withDecimals(0).withSuffix("s");
     }
 
-    static SliderSetting aotvToRoofPitchRangeSetting() {
-        return new SliderSetting("AOTV to Roof Pitch Range", 0, 15,
-                () -> (float) AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.get(),
-                v -> {
-                    AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.set(Math.round(v));
+    static RangeSliderSetting aotvToRoofPitchSetting() {
+        return new RangeSliderSetting("AOTV to Roof Pitch", 0, 90,
+                () -> (float) Math.max(0, AetherConfig.AOTV_ROOF_PITCH.get()
+                        - AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.get()),
+                () -> (float) Math.min(90, AetherConfig.AOTV_ROOF_PITCH.get()
+                        + AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.get()),
+                (lower, upper) -> {
+                    int min = Math.round(lower);
+                    int max = Math.round(upper);
+                    AetherConfig.AOTV_ROOF_PITCH.set((min + max) / 2);
+                    AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.set((max - min) / 2);
                     AetherConfig.save();
                 })
                 .withDecimals(0).withSuffix("\u00B0");

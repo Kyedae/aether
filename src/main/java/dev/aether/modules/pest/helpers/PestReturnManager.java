@@ -232,6 +232,10 @@ public class PestReturnManager {
     public static void performUnfly(Minecraft client) throws InterruptedException {
         if (client.player == null)
             return;
+        if (!client.player.getAbilities().flying) {
+            ClientUtils.sendDebugMessage("Finisher: player is already grounded; skipping unfly.");
+            return;
+        }
 
         if (ConfigHelpers.getUnflyMode() == UnflyMode.DOUBLE_TAP_SPACE) {
             isStoppingFlight = true;

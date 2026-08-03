@@ -37,6 +37,9 @@ public class PestManager {
     private static volatile long lastLocalKillUpdateMs = 0;
     private static volatile boolean isCleaningTriggerPending = false;
     private static volatile long pestReentryCooldownUntilMs = 0;
+    private static volatile PendingChatTrigger pendingChatTrigger;
+    private static volatile boolean pendingChatTriggerWaitsForLoadout = false;
+    private static volatile long pendingChatTriggerDelayAfterLoadoutMs = 0L;
     private static volatile int lastCleaningAliveCount = -1;
     private static volatile long lastCleaningProgressAtMs = 0L;
     private static volatile boolean rewarpTriggerAvailable = false;
@@ -175,6 +178,9 @@ public class PestManager {
         lastLocalKillUpdateMs = 0;
         isCleaningTriggerPending = false;
         pestReentryCooldownUntilMs = 0;
+        pendingChatTrigger = null;
+        pendingChatTriggerWaitsForLoadout = false;
+        pendingChatTriggerDelayAfterLoadoutMs = 0L;
         lastCleaningAliveCount = -1;
         lastCleaningProgressAtMs = 0L;
         rewarpTriggerAvailable = false;
@@ -199,6 +205,16 @@ public class PestManager {
             return;
         if (!isPestDestroyerEnabled())
             return;
+
+        if (processPendingChatTrigger(client, currentState)) {
+            return;
+        }
+
+        // A delayed chat trigger owns this pest event. Tab-list updates may refresh
+        // the count, but must not start cleaning before the full delay expires.
+        if (pendingChatTrigger != null) {
+            return;
+        }
 
         if (isCleaningInProgress
                 && currentState == MacroState.State.FARMING
@@ -274,7 +290,8 @@ public class PestManager {
             return;
         }
 
-        if (isThresholdMet(effectiveAlive)) {
+        Set<String> actionablePlots = PestDestroyer.filterRememberedLeaveOnePlots(data.infestedPlots());
+        if (isThresholdMet(effectiveAlive) && !actionablePlots.isEmpty()) {
             if (isPestReentryCooldownActive()) {
                 return;
             }
@@ -294,9 +311,9 @@ public class PestManager {
             if (effectiveAlive >= 8 && effectiveAlive < 99) {
                 ClientUtils.sendMessage("\u00A7eMax Pests (8) reached. Starting cleaning...", true);
             }
-            setCurrentInfestedPlots(data.infestedPlots());
-            String targetPlot = data.infestedPlots().stream().findFirst().orElse(null);
-            ClientUtils.sendDebugMessage("[PestManager] Tab threshold met. infestedPlots=" + data.infestedPlots()
+            setCurrentInfestedPlots(actionablePlots);
+            String targetPlot = actionablePlots.stream().findFirst().orElse(null);
+            ClientUtils.sendDebugMessage("[PestManager] Tab threshold met. infestedPlots=" + actionablePlots
                             + " targetPlot=" + targetPlot + " currentPlot=" + ClientUtils.getCurrentPlot());
             boolean started = startCleaningSequence(client, targetPlot, effectiveAlive);
             if (started) {
@@ -320,6 +337,80 @@ public class PestManager {
         Minecraft client = Minecraft.getInstance();
         checkTabListForPests(client, MacroStateManager.getCurrentState());
     }
+
+    /** Schedules a chat trigger without blocking the shared worker or farming. */
+    public static synchronized void scheduleChatCleaningTrigger(String plot, int spawnedCount, long delayMs) {
+        boolean requestedBallsackLoadout = false;
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            int farmingSlot = AetherConfig.LOADOUT_SLOT_FARMING.get();
+            if (farmingSlot > 0
+                    && LoadoutManager.trackedLoadoutSlot != farmingSlot
+                    && !(LoadoutManager.isSwappingLoadout
+                            && LoadoutManager.targetLoadoutSlot == farmingSlot)) {
+                LoadoutManager.triggerLoadoutSwap(Minecraft.getInstance(), farmingSlot);
+                requestedBallsackLoadout = true;
+            }
+        }
+
+        long normalizedDelayMs = Math.max(0L, delayMs);
+        long triggerAt = System.currentTimeMillis() + normalizedDelayMs;
+        if (pendingChatTrigger == null) {
+            pendingChatTrigger = new PendingChatTrigger(plot, Math.max(0, spawnedCount), triggerAt);
+        } else {
+            pendingChatTrigger = new PendingChatTrigger(plot,
+                    pendingChatTrigger.spawnedCount + Math.max(0, spawnedCount),
+                    Math.min(pendingChatTrigger.triggerAtMs, triggerAt));
+        }
+
+        if (requestedBallsackLoadout) {
+            pendingChatTriggerWaitsForLoadout = true;
+            pendingChatTriggerDelayAfterLoadoutMs = pendingChatTriggerDelayAfterLoadoutMs == 0L
+                    ? normalizedDelayMs
+                    : Math.min(pendingChatTriggerDelayAfterLoadoutMs, normalizedDelayMs);
+        }
+    }
+
+    private static synchronized boolean processPendingChatTrigger(Minecraft client, MacroState.State currentState) {
+        PendingChatTrigger pending = pendingChatTrigger;
+        if (pending == null) {
+            return false;
+        }
+        if (pendingChatTriggerWaitsForLoadout) {
+            if (LoadoutManager.isSwappingLoadout
+                    || !LoadoutManager.loadoutGuiCloseComplete
+                    || currentState != MacroState.State.FARMING) {
+                return false;
+            }
+
+            pendingChatTrigger = new PendingChatTrigger(pending.plot, pending.spawnedCount,
+                    System.currentTimeMillis() + pendingChatTriggerDelayAfterLoadoutMs);
+            pendingChatTriggerWaitsForLoadout = false;
+            pendingChatTriggerDelayAfterLoadoutMs = 0L;
+            return false;
+        }
+        if (currentState != MacroState.State.FARMING) {
+            if (AetherConfig.BALLSACK_SHREDDER.get() && LoadoutManager.isSwappingLoadout) {
+                return false;
+            }
+            pendingChatTrigger = null;
+            pendingChatTriggerWaitsForLoadout = false;
+            pendingChatTriggerDelayAfterLoadoutMs = 0L;
+            return false;
+        }
+        if (System.currentTimeMillis() < pending.triggerAtMs) {
+            return false;
+        }
+        if (LoadoutManager.isSwappingLoadout || !MacroStateManager.isMacroRunning()) {
+            return false;
+        }
+        pendingChatTrigger = null;
+        pendingChatTriggerWaitsForLoadout = false;
+        pendingChatTriggerDelayAfterLoadoutMs = 0L;
+        tryStartCleaningSequenceFromChat(client, pending.plot, pending.spawnedCount);
+        return true;
+    }
+
+    private record PendingChatTrigger(String plot, int spawnedCount, long triggerAtMs) {}
 
     /**
      * Returns effective pests alive count from tab/chat sync.
@@ -402,11 +493,13 @@ public class PestManager {
             return false;
         }
 
-        Set<String> candidatePlots = new LinkedHashSet<>(data.infestedPlots());
+        Set<String> candidatePlots = new LinkedHashSet<>();
         String normalizedRequestedPlot = PestPlotId.normalize(requestedPlot);
         if (PestPlotId.isUsable(normalizedRequestedPlot)) {
             candidatePlots.add(normalizedRequestedPlot);
         }
+        candidatePlots.addAll(data.infestedPlots());
+        candidatePlots = PestDestroyer.filterRememberedLeaveOnePlots(candidatePlots);
 
         String targetPlot = candidatePlots.stream()
                 .findFirst()
@@ -427,10 +520,16 @@ public class PestManager {
     }
 
     public static void decrementPredictedAliveCount(Minecraft client) {
-        if (predictedAliveCount > 0) {
-            predictedAliveCount--;
+        decrementPredictedAliveCount(client, 1);
+    }
+
+    public static synchronized void decrementPredictedAliveCount(Minecraft client, int killedCount) {
+        int appliedKills = Math.min(predictedAliveCount, Math.max(0, killedCount));
+        if (appliedKills > 0) {
+            predictedAliveCount -= appliedKills;
             lastLocalKillUpdateMs = System.currentTimeMillis();
-            ClientUtils.sendDebugMessage("Pest kill detected! Predicted alive: " + predictedAliveCount
+            ClientUtils.sendDebugMessage("Pest kill detected! Count: " + appliedKills
+                            + ", predicted alive: " + predictedAliveCount
                             + ", currentPlot=" + ClientUtils.getCurrentPlot()
                             + ", whitelistedPlots=" + AetherConfig.LEAVE_ONE_PEST_PLOTS.get());
 

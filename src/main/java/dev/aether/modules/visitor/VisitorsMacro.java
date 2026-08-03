@@ -17,6 +17,7 @@ import dev.aether.modules.rotation.RotationManager;
 import dev.aether.util.BazaarUtils;
 import dev.aether.util.ClientUtils;
 import dev.aether.util.CommandUtils;
+import dev.aether.util.EntityUtils;
 import dev.aether.util.TablistUtils;
 import dev.aether.util.RotationUtils;
 import net.minecraft.client.Minecraft;
@@ -25,7 +26,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
@@ -602,55 +602,9 @@ public class VisitorsMacro {
     // -- Entity Finding --
 
     private static Entity findVisitorEntity(Minecraft client, String visitorName) {
-        if (client.level == null || client.player == null)
-            return null;
-
-        String target = normalizeVisitorName(visitorName);
-
-        // Look for armor stands with matching name (visitor NPCs have name tags)
-        Entity best = null;
-        double bestDist = Double.MAX_VALUE;
-
-        for (Entity entity : client.level.entitiesForRendering()) {
-            if (entity == client.player)
-                continue;
-            String entityName = normalizeVisitorName(entity.getName().getString());
-
-            if (entityName.equals(target)) {
-                double dist = entity.distanceToSqr(client.player);
-                // Prefer non-armor-stand entities (the actual NPC character)
-                // but accept armor stands if that's all we find
-                if (!(entity instanceof ArmorStand)) {
-                    if (dist < bestDist || best instanceof ArmorStand) {
-                        bestDist = dist;
-                        best = entity;
-                    }
-                } else if (best == null) {
-                    bestDist = dist;
-                    best = entity;
-                }
-            }
-        }
-
-        // If we only found an armor stand, try to find the actual character near it
-        if (best instanceof ArmorStand) {
-            Entity character = findCharacterNearArmorStand(client, best);
-            if (character != null)
-                return character;
-        }
-
-        return best;
-    }
-
-    private static Entity findCharacterNearArmorStand(Minecraft client, Entity armorStand) {
-        for (Entity entity : client.level.entitiesForRendering()) {
-            if (entity == client.player || entity instanceof ArmorStand)
-                continue;
-            if (entity.distanceToSqr(armorStand) < 4.0) {
-                return entity;
-            }
-        }
-        return null;
+        // Keep visitor targeting consistent with /aether interact, including
+        // exact-name preference and armor-stand-to-NPC resolution.
+        return EntityUtils.findEntity(client, visitorName);
     }
 
     // -- Movement / Interaction --
@@ -893,6 +847,29 @@ public class VisitorsMacro {
                         ClientUtils.sendDebugMessage("[VisitorsMacro] Closing wrong visitor GUI while targeting " + visitorName + ".");
                         closeScreen(client);
                         MacroWorkerThread.sleep(250);
+                        prepRetries++;
+                        if (prepRetries > MAX_VISITOR_INTERACTION_RETRIES) {
+                            return false;
+                        }
+
+                        // A wrong GUI means the last ray trace hit another NPC.
+                        // Force a fresh path even if we are inside the normal
+                        // interaction radius; otherwise the next click can hit
+                        // the same NPC again indefinitely.
+                        Entity targetVisitor = findVisitorEntity(client, visitorName);
+                        if (targetVisitor == null) {
+                            continue;
+                        }
+                        currentVisitorRetrySneak = true;
+                        walkToEntity(client, targetVisitor, VISITOR_RETRY_RANGE);
+                        if (shouldStop) {
+                            return false;
+                        }
+                        entity = findVisitorEntity(client, visitorName);
+                        if (entity == null) {
+                            continue;
+                        }
+                        faceVisitorForInteraction(client, entity);
                         break;
                     }
                     return true;

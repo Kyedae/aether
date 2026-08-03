@@ -138,6 +138,44 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                 .add(FarmingSettingsFactory.pestFovRangeSetting())
                 .add(FarmingSettingsFactory.pestAboveAimPitchRangeSetting()));
         groups.add(SettingGroup.of(
+                        "Ballsack Shredder",
+                        "Uses a dedicated AOTV sequence before pest cleaning",
+                        AetherConfig.BALLSACK_SHREDDER::get,
+                        v -> {
+                            AetherConfig.BALLSACK_SHREDDER.set(v);
+                            AetherConfig.save();
+                        })
+                .add(FarmingSettingsFactory.pestDestroyerTriggerDelaySetting())
+                .add(new SliderSetting("Look Down Time", 0, 3000,
+                        () -> (float) AetherConfig.BALLSACK_LOOK_DOWN_TIME_MS.get(),
+                        v -> {
+                            AetherConfig.BALLSACK_LOOK_DOWN_TIME_MS.set(Math.round(v));
+                            AetherConfig.save();
+                        })
+                        .withDecimals(0).withSuffix("ms")));
+
+        groups.add(SettingGroup.of(
+                        "AOTV to Roof",
+                        "Teleports to the roof before cleaning pests on selected plots",
+                        () -> AetherConfig.AOTV_TO_ROOF.get(),
+                        v -> {
+                            AetherConfig.AOTV_TO_ROOF.set(v);
+                            AetherConfig.save();
+                        })
+                .add(new ListSetting("AOTV Roof Plots", "Add plot number",
+                        () -> AetherConfig.AOTV_ROOF_PLOTS.get(),
+                        v -> {
+                            AetherConfig.AOTV_ROOF_PLOTS.set(v);
+                            AetherConfig.save();
+                        }))
+                .add(FarmingSettingsFactory.aotvToRoofPitchSetting())
+                .add(new ToggleSetting("Break Blocks Before AOTV",
+                        () -> AetherConfig.BREAK_BLOCKS_BEFORE_AOTV.get(),
+                        v -> {
+                            AetherConfig.BREAK_BLOCKS_BEFORE_AOTV.set(v);
+                            AetherConfig.save();
+                        })));
+        groups.add(SettingGroup.of(
                 "On-The-Track Pest",
                 "Pauses farming briefly to vacuum pests already within reach",
                 () -> AetherConfig.PEST_ON_TRACK_ENABLED.get(),
@@ -193,35 +231,6 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                         .addIconAction("/assets/aether/icons/refresh.svg", () -> refreshSoundOptions(manualPestSoundOptions)))
                 .add(new KeybindSetting("Manual Pest Early Finish",
                         AetherKeybindRegistry.getManualPestEarlyFinishKey())));
-
-        groups.add(SettingGroup.of(
-                        "AOTV to Roof",
-                        "Teleports to the roof before cleaning pests on selected plots",
-                        () -> AetherConfig.AOTV_TO_ROOF.get(),
-                        v -> {
-                            AetherConfig.AOTV_TO_ROOF.set(v);
-                            AetherConfig.save();
-                        })
-                .add(new ListSetting("AOTV Roof Plots", "Add plot number",
-                        () -> AetherConfig.AOTV_ROOF_PLOTS.get(),
-                        v -> {
-                            AetherConfig.AOTV_ROOF_PLOTS.set(v);
-                            AetherConfig.save();
-                        }))
-                .add(new SliderSetting("AOTV to Roof Pitch", 20, 90,
-                        () -> (float) AetherConfig.AOTV_ROOF_PITCH.get(),
-                        v -> {
-                            AetherConfig.AOTV_ROOF_PITCH.set(Math.round(v));
-                            AetherConfig.save();
-                        })
-                        .withDecimals(0).withSuffix("\u00B0"))
-                .add(FarmingSettingsFactory.aotvToRoofPitchRangeSetting())
-                .add(new ToggleSetting("Break Blocks Before AOTV",
-                        () -> AetherConfig.BREAK_BLOCKS_BEFORE_AOTV.get(),
-                        v -> {
-                            AetherConfig.BREAK_BLOCKS_BEFORE_AOTV.set(v);
-                            AetherConfig.save();
-                        })));
 
         groups.add(SettingGroup.of(
                         "Pest Traps",

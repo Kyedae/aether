@@ -54,10 +54,17 @@ final class PestRoofAotvController {
         runtime.aotvStartY = Double.NaN;
         releaseAotvKeys(client);
         float targetYaw = client.player.getYRot() + (float) (-10.0 + Math.random() * 20.0);
-        float targetPitch = (float) (-30.0 + Math.random() * 60.0);
+        float targetPitch = AetherConfig.BALLSACK_SHREDDER.get()
+                ? 90.0f
+                : (float) (-30.0 + Math.random() * 60.0);
         RotationManager.rotateToYawPitch(
                 client, targetYaw, targetPitch, AetherConfig.ROTATION_TIME.get(), true);
-        PestDestroyer.setState(PestDestroyer.State.AOTV_TO_ROOF_RETURN);
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            PestAotvManager.setSneakingForAotv(false);
+            PestDestroyer.setState(PestDestroyer.State.AOTV_POST_LOOKDOWN);
+        } else {
+            PestDestroyer.setState(PestDestroyer.State.AOTV_TO_ROOF_RETURN);
+        }
     }
 
     private static void recoverTimedOutClimb(Minecraft client, PestDestroyerRuntime runtime) {

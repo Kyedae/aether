@@ -202,6 +202,10 @@ public class CommandUtils {
      * @return true if spawn was set successfully, false if timeout occurred
      */
     public static boolean setSpawn() {
+        return setSpawn(MESSAGE_TIMEOUT_MS);
+    }
+
+    public static boolean setSpawn(long timeoutMs) {
         if (shouldSkipSetSpawn()) {
             return true;
         }
@@ -209,7 +213,7 @@ public class CommandUtils {
         ChatWindow window = beginChatWindow();
         ClientUtils.sendCommand("/setspawn");
 
-        boolean success = waitForChatMessage(window, "Your spawn location has been set!", MESSAGE_TIMEOUT_MS);
+        boolean success = waitForChatMessage(window, "Your spawn location has been set!", timeoutMs);
 
         if (success) {
             ClientUtils.sendDebugMessage("Spawn set has been detected");

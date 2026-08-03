@@ -48,6 +48,7 @@ public class PestDestroyer {
         AOTV_BETWEEN_PESTS,
         AOTV_TO_ROOF,
         AOTV_TO_ROOF_RETURN,
+        AOTV_POST_LOOKDOWN,
         FINISH
     }
 
@@ -92,6 +93,7 @@ public class PestDestroyer {
             // Fallback to cached value
             infested = PestManager.getCurrentInfestedPlots();
         }
+        infested = PestLeaveOneController.filterSkippedPlots(runtime, infested);
 
         if (PestPlotId.isUsable(initialPlot)) {
             runtime.navigation.plotQueue.add(initialPlot);
@@ -165,6 +167,7 @@ public class PestDestroyer {
     }
 
     public static void reset() {
+        PestLeaveOneController.clearRememberedPlots(runtime);
         runtime.resetAll();
     }
 
@@ -198,6 +201,11 @@ public class PestDestroyer {
             return;
         }
 
+        if (PestTargetController.reconcileTrackedKills(
+                client, runtime, CONTEXT)) {
+            return;
+        }
+
         if (PestDestroyerProgressController.tick(
                 client, runtime, STUCK_TIMEOUT_MS, CONTEXT)) {
             return;
@@ -214,6 +222,7 @@ public class PestDestroyer {
                     || runtime.state == State.TELEPORT_TO_PLOT
                     || runtime.state == State.AOTV_TO_ROOF
                     || runtime.state == State.AOTV_TO_ROOF_RETURN
+                    || runtime.state == State.AOTV_POST_LOOKDOWN
                     || runtime.state == State.FLY_UP) {
                 break;
             }
@@ -243,6 +252,7 @@ public class PestDestroyer {
             } // Handled by worker thread
             case AOTV_TO_ROOF_RETURN -> {
             } // Handled early in update()
+            case AOTV_POST_LOOKDOWN -> handlePostAotvLookdown(client);
             case FINISH -> finish(client);
             default -> {
             }
@@ -308,6 +318,11 @@ public class PestDestroyer {
         State returnState = runtime.roofAotvReturnState;
         runtime.roofAotvReturnState = null;
         if (!runtime.active) {
+            return;
+        }
+        if (runtime.state == State.AOTV_POST_LOOKDOWN) {
+            runtime.roofAotvReturnState = null;
+            setState(State.FLY_UP);
             return;
         }
         if (returnState == null || returnState == State.IDLE || returnState == State.FINISH
@@ -404,6 +419,25 @@ public class PestDestroyer {
                 STATE_TIMEOUT_MS);
     }
 
+    private static void handlePostAotvLookdown(Minecraft client) {
+        if (RotationManager.isRotating()) {
+            return;
+        }
+        if (runtime.vacuumSlot < 0) {
+            setState(State.EQUIP_VACUUM);
+            return;
+        }
+        int selected = ((dev.aether.mixin.AccessorInventory) client.player.getInventory()).getSelected();
+        if (selected != runtime.vacuumSlot) {
+            client.execute(() -> FailsafeManager.selectHotbarSlot(client, runtime.vacuumSlot));
+            return;
+        }
+        ClientUtils.setKeyMappingState(client.options.keyUse, true);
+        if (System.currentTimeMillis() - runtime.stateEnteredAt >= AetherConfig.BALLSACK_LOOK_DOWN_TIME_MS.get()) {
+            completeRoofAotv();
+        }
+    }
+
     private static void handleAotvBetweenPests(Minecraft client) {
         PestCombatCoordinator.handleAotvBetweenPests(
                 client,
@@ -469,6 +503,18 @@ public class PestDestroyer {
 
     static Set<String> filterSkippedInfestedPlots(Set<String> infested) {
         return PestLeaveOneController.filterSkippedPlots(runtime, infested);
+    }
+
+    public static Set<String> filterRememberedLeaveOnePlots(Set<String> infested) {
+        return PestLeaveOneController.filterSkippedPlots(runtime, infested);
+    }
+
+    public static void onPestsSpawnedInPlot(String plot) {
+        PestLeaveOneController.forgetPlot(runtime, plot);
+    }
+
+    public static void clearRememberedLeaveOnePlots() {
+        PestLeaveOneController.clearRememberedPlots(runtime);
     }
 
     private static boolean plotsEqual(String first, String second) {

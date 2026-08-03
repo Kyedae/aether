@@ -9,6 +9,7 @@ import dev.aether.modules.gear.helpers.LoadoutManager;
 import dev.aether.modules.pest.ManualPestManager;
 import dev.aether.modules.pest.PestManager;
 import dev.aether.util.ClientUtils;
+import dev.aether.util.CommandUtils;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -26,6 +27,8 @@ public final class PestLifecycleManager {
 
     private static volatile Stage stage = Stage.IDLE;
     private static volatile boolean sunsetPestsRestoreNight = false;
+    private static final long SETSPAWN_RETRY_MS = 1_000L;
+    static final int SETSPAWN_MAX_ATTEMPTS = 2;
 
     private PestLifecycleManager() {
     }
@@ -75,8 +78,36 @@ public final class PestLifecycleManager {
 
         boolean manualMode = AetherConfig.MANUAL_PEST_MODE.get();
         stage = Stage.PRE;
-        ClientUtils.sendDebugMessage("Pest lifecycle: entering PRE stage for plot " + plot + ".");
-        client.execute(() -> FarmingMacroManager.disable(client));
+        ClientUtils.sendDebugMessage("Pest lifecycle: waiting for /setspawn while farming continues.");
+        MacroWorkerThread.getInstance().submit("PestSetSpawn-" + plot, () -> {
+            for (int attempt = 0; attempt < SETSPAWN_MAX_ATTEMPTS && isSetSpawnRetryPending(client, sessionId);
+                    attempt++) {
+                if (CommandUtils.setSpawn(SETSPAWN_RETRY_MS)) {
+                    client.execute(() -> beginPreStage(client, plot, pestCount, sessionId, manualMode));
+                    return;
+                }
+                if (attempt + 1 < SETSPAWN_MAX_ATTEMPTS) {
+                    ClientUtils.sendDebugMessage("Pest lifecycle: /setspawn not confirmed; farming and retrying once.");
+                }
+            }
+            if (isSetSpawnRetryPending(client, sessionId)) {
+                ClientUtils.sendDebugMessage("Pest lifecycle: /setspawn failed twice; continuing farming.");
+                PestManager.startPestReentryCooldown();
+            }
+            cancelPendingStart(sessionId);
+        });
+        return true;
+    }
+
+    private static void beginPreStage(Minecraft client, String plot, int pestCount, int sessionId,
+            boolean manualMode) {
+        if (!isSetSpawnRetryPending(client, sessionId)) {
+            cancelPendingStart(sessionId);
+            return;
+        }
+
+        ClientUtils.sendDebugMessage("Pest lifecycle: /setspawn confirmed; entering PRE stage for plot " + plot + ".");
+        FarmingMacroManager.disable(client);
         PestManager.setCleaningInProgress(true);
         PestManager.clearCleaningTriggerPending();
         LoadoutManager.shouldRestartFarmingAfterSwap = false;
@@ -84,17 +115,39 @@ public final class PestLifecycleManager {
 
         MacroWorkerThread.getInstance().submit("PestPre-" + plot, () -> {
             try {
-                if (!PestPreStage.run(client, plot, sessionId)) {
+                PestPreStage.Result preResult =
+                        PestPreStage.run(client, plot, pestCount, sessionId);
+                if (!preResult.successful()) {
                     abortPreStage(client, sessionId);
                     return;
                 }
-                client.execute(() -> startCleaningStage(client, plot, pestCount, sessionId, manualMode));
+                client.execute(() -> startCleaningStage(
+                        client, plot, pestCount, sessionId, manualMode, preResult));
             } catch (Exception e) {
                 e.printStackTrace();
                 abortPreStage(client, sessionId);
             }
         });
-        return true;
+    }
+
+    static boolean isSetSpawnRetryPending(Minecraft client, int sessionId) {
+        return shouldRetrySetSpawn(stage, sessionId, PestManager.getCurrentPestSessionId(),
+                PestManager.isCleaningInProgress(),
+                MacroWorkerThread.shouldAbortTask(client, MacroState.State.FARMING));
+    }
+
+    static boolean shouldRetrySetSpawn(Stage currentStage, int sessionId, int currentSessionId,
+            boolean cleaning, boolean abort) {
+        return currentStage == Stage.PRE && sessionId == currentSessionId && !cleaning && !abort;
+    }
+
+    private static void cancelPendingStart(int sessionId) {
+        if (stage == Stage.PRE
+                && sessionId == PestManager.getCurrentPestSessionId()
+                && !PestManager.isCleaningInProgress()) {
+            stage = Stage.IDLE;
+            PestManager.clearCleaningTriggerPending();
+        }
     }
 
     public static void startPostStage(Minecraft client) {
@@ -111,11 +164,30 @@ public final class PestLifecycleManager {
         stage = Stage.IDLE;
     }
 
-    private static void startCleaningStage(Minecraft client, String plot, int pestCount, int sessionId,
-            boolean manualMode) {
+    private static void startCleaningStage(
+            Minecraft client,
+            String plot,
+            int pestCount,
+            int sessionId,
+            boolean manualMode,
+            PestPreStage.Result preResult) {
         if (stage != Stage.PRE
                 || sessionId != PestManager.getCurrentPestSessionId()
                 || !PestManager.isCleaningInProgress()) {
+            return;
+        }
+
+        PestBallsackShredder.Result ballsackResult = preResult.ballsackResult();
+        if (ballsackResult != null && ballsackResult.measured()) {
+            PestManager.decrementPredictedAliveCount(client, ballsackResult.estimatedKilled());
+        }
+        if (ballsackResult != null
+                && ballsackResult.measured()
+                && shouldSkipCleaningAfterBallsack(client, plot, ballsackResult.estimatedRemaining())) {
+            ClientUtils.sendDebugMessage("Ballsack Shredder: "
+                    + ballsackResult.estimatedRemaining()
+                    + " pest(s) estimated remaining; skipping CLEANING and entering POST.");
+            startPostStage(client);
             return;
         }
 
@@ -136,6 +208,24 @@ public final class PestLifecycleManager {
             PestBonusManager.beginReactivation();
         }
         client.execute(() -> PestDestroyer.start(client, plot));
+    }
+
+    static boolean shouldSkipCleaningAfterBallsack(
+            Minecraft client, String targetPlot, int estimatedRemaining) {
+        boolean targetLeavesOnePest = AetherConfig.LEAVE_ONE_PEST_ALIVE.get()
+                && AetherConfig.LEAVE_ONE_PEST_PLOTS.get().stream()
+                        .map(PestPlotId::normalize)
+                        .anyMatch(PestPlotId.normalize(targetPlot)::equals);
+        return shouldSkipCleaningAfterBallsack(
+                estimatedRemaining,
+                targetLeavesOnePest,
+                PestDestroyer.shouldFinishForAliveCount(client, estimatedRemaining));
+    }
+
+    static boolean shouldSkipCleaningAfterBallsack(
+            int estimatedRemaining, boolean targetLeavesOnePest, boolean rememberedLeavesCanFinish) {
+        return estimatedRemaining == 0
+                || estimatedRemaining == 1 && (targetLeavesOnePest || rememberedLeavesCanFinish);
     }
 
     private static void abortPreStage(Minecraft client, int sessionId) {

@@ -10,6 +10,7 @@ import net.minecraft.world.phys.Vec3;
 import dev.aether.modules.gear.GearManager;
 import dev.aether.macro.MacroWorkerThread;
 import dev.aether.modules.rotation.RotationManager;
+import dev.aether.modules.failsafe.FailsafeManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -100,7 +101,7 @@ public class PestAotvManager {
     }
 
     public static boolean shouldDoAotvOnCurrentPlot(Minecraft client, String currentInfestedPlot, boolean isSamePlot) {
-        if (!AetherConfig.AOTV_TO_ROOF.get())
+        if (AetherConfig.BALLSACK_SHREDDER.get() || !AetherConfig.AOTV_TO_ROOF.get())
             return false;
 
         if (AetherConfig.AOTV_ROOF_PLOTS.get().isEmpty())
@@ -192,12 +193,12 @@ public class PestAotvManager {
             return;
         }
         Vec3 eyePos = aimOrigin.eyePosition();
-        float upwardYaw = aimOrigin.yaw() + randomYawOffset();
+        float upwardYaw = aimOrigin.yaw();
         float yawRad = (float) Math.toRadians(upwardYaw);
-        int baseUpPitch = Math.max(20, Math.min(90, AetherConfig.AOTV_ROOF_PITCH.get()));
+        int baseUpPitch = Math.max(0, Math.min(90, AetherConfig.AOTV_ROOF_PITCH.get()));
         int humanization = Math.max(0, Math.min(15, AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.get()));
         double randomizedUpPitch = baseUpPitch + ((Math.random() * 2.0) - 1.0) * humanization;
-        randomizedUpPitch = Math.max(20.0, Math.min(90.0, randomizedUpPitch));
+        randomizedUpPitch = Math.max(0.0, Math.min(90.0, randomizedUpPitch));
         float targetMcPitch = (float) -randomizedUpPitch;
         double pitchRad = Math.toRadians(targetMcPitch);
 
@@ -255,7 +256,9 @@ public class PestAotvManager {
 
         float targetYaw = PestClientThread.call(
                 client, () -> client.player.getYRot() + randomYawOffset(), 0.0f);
-        float targetPitch = (float) (-30.0 + Math.random() * 60.0);
+        float targetPitch = AetherConfig.BALLSACK_SHREDDER.get()
+                ? 90.0f
+                : (float) (-30.0 + Math.random() * 60.0);
         int rotTime = (int) (AetherConfig.ROTATION_TIME.get() * (0.92 + Math.random() * 0.16));
         AtomicBoolean started = new AtomicBoolean(false);
         client.execute(() -> {
@@ -272,6 +275,16 @@ public class PestAotvManager {
         }
         while (started.get() && RotationManager.isRotating() && System.currentTimeMillis() < deadline) {
             MacroWorkerThread.sleep(20);
+        }
+
+        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+            int vacuumSlot = PestLoadoutHelper.findVacuumHotbarSlot(client);
+            if (vacuumSlot >= 0 && vacuumSlot < 9) {
+                PestClientThread.run(client, () -> {
+                    FailsafeManager.selectHotbarSlot(client, vacuumSlot);
+                    ClientUtils.setKeyMappingState(client.options.keyUse, true);
+                });
+            }
         }
     }
 

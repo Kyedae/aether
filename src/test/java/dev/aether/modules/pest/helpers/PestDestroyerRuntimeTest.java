@@ -40,4 +40,16 @@ class PestDestroyerRuntimeTest {
         assertEquals(0, runtime.zeroPestTabTicks);
         assertTrue(runtime.navigation.plotQueue.isEmpty());
     }
+
+    @Test
+    void claimsMultipleKilledPestsOncePerEntity() {
+        PestDestroyerRuntime runtime = new PestDestroyerRuntime();
+
+        assertTrue(runtime.claimKilledPestEntityId(10));
+        assertTrue(runtime.claimKilledPestEntityId(11));
+        assertTrue(runtime.claimKilledPestEntityId(12));
+        assertFalse(runtime.claimKilledPestEntityId(10));
+        assertFalse(runtime.claimKilledPestEntityId(12));
+        assertEquals(3, runtime.accountedKilledPestEntityIds.size());
+    }
 }
