@@ -208,14 +208,7 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.AOTV_ROOF_PLOTS.set(v);
                             AetherConfig.save();
                         }))
-                .add(new SliderSetting("AOTV to Roof Pitch", 20, 90,
-                        () -> (float) AetherConfig.AOTV_ROOF_PITCH.get(),
-                        v -> {
-                            AetherConfig.AOTV_ROOF_PITCH.set(Math.round(v));
-                            AetherConfig.save();
-                        })
-                        .withDecimals(0).withSuffix("\u00B0"))
-                .add(FarmingSettingsFactory.aotvToRoofPitchRangeSetting())
+                .add(FarmingSettingsFactory.aotvToRoofPitchSetting())
                 .add(new ToggleSetting("Break Blocks Before AOTV",
                         () -> AetherConfig.BREAK_BLOCKS_BEFORE_AOTV.get(),
                         v -> {

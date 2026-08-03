@@ -417,9 +417,9 @@ public final class AetherConfig {
         public static final BooleanEntry TRIGGER_PEST_ON_CHAT = Config.bool("triggerPestOnChat", true);
         public static final BooleanEntry PEST_TRIGGER_ONLY_AFTER_REWARP = Config.bool("pestTriggerOnlyAfterRewarp", false);
         public static final IntEntry PEST_CHAT_TRIGGER_DELAY_MIN = Config.integer("pestChatTriggerDelayMin", 500)
-                        .range(0, 5000);
+                        .range(0, 30000);
         public static final IntEntry PEST_CHAT_TRIGGER_DELAY_MAX = Config.integer("pestChatTriggerDelayMax", 3000)
-                        .range(0, 5000);
+                        .range(0, 30000);
         public static final BooleanEntry DELAY_PEST_FOR_CROP_FEVER = Config.bool("delayPestForCropFever", false);
         public static final BooleanEntry PEST_ON_TRACK_ENABLED = Config.bool("pestOnTrackEnabled", false);
         // start: farmhelper ish pest on track
@@ -537,7 +537,7 @@ public final class AetherConfig {
         // -- AOTV ------------------------------------------------------------------
 
         public static final BooleanEntry AOTV_TO_ROOF = Config.bool("aotvToRoof", false);
-        public static final IntEntry AOTV_ROOF_PITCH = Config.integer("aotvRoofPitch", 88).range(20, 90);
+        public static final IntEntry AOTV_ROOF_PITCH = Config.integer("aotvRoofPitch", 88).range(0, 90);
         public static final IntEntry AOTV_ROOF_PITCH_HUMANIZATION = Config.integer("aotvRoofPitchHumanization", 5)
                         .range(0, 15);
         public static final ListEntry<String> AOTV_ROOF_PLOTS = Config.list("aotvRoofPlots", Collections.emptyList(),

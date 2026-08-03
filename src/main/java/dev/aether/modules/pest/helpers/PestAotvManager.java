@@ -192,12 +192,12 @@ public class PestAotvManager {
             return;
         }
         Vec3 eyePos = aimOrigin.eyePosition();
-        float upwardYaw = aimOrigin.yaw() + randomYawOffset();
+        float upwardYaw = aimOrigin.yaw();
         float yawRad = (float) Math.toRadians(upwardYaw);
-        int baseUpPitch = Math.max(20, Math.min(90, AetherConfig.AOTV_ROOF_PITCH.get()));
+        int baseUpPitch = Math.max(0, Math.min(90, AetherConfig.AOTV_ROOF_PITCH.get()));
         int humanization = Math.max(0, Math.min(15, AetherConfig.AOTV_ROOF_PITCH_HUMANIZATION.get()));
         double randomizedUpPitch = baseUpPitch + ((Math.random() * 2.0) - 1.0) * humanization;
-        randomizedUpPitch = Math.max(20.0, Math.min(90.0, randomizedUpPitch));
+        randomizedUpPitch = Math.max(0.0, Math.min(90.0, randomizedUpPitch));
         float targetMcPitch = (float) -randomizedUpPitch;
         double pitchRad = Math.toRadians(targetMcPitch);
 

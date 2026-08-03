@@ -37,6 +37,7 @@ public class PestManager {
     private static volatile long lastLocalKillUpdateMs = 0;
     private static volatile boolean isCleaningTriggerPending = false;
     private static volatile long pestReentryCooldownUntilMs = 0;
+    private static volatile PendingChatTrigger pendingChatTrigger;
     private static volatile int lastCleaningAliveCount = -1;
     private static volatile long lastCleaningProgressAtMs = 0L;
     private static volatile boolean rewarpTriggerAvailable = false;
@@ -175,6 +176,7 @@ public class PestManager {
         lastLocalKillUpdateMs = 0;
         isCleaningTriggerPending = false;
         pestReentryCooldownUntilMs = 0;
+        pendingChatTrigger = null;
         lastCleaningAliveCount = -1;
         lastCleaningProgressAtMs = 0L;
         rewarpTriggerAvailable = false;
@@ -199,6 +201,16 @@ public class PestManager {
             return;
         if (!isPestDestroyerEnabled())
             return;
+
+        if (processPendingChatTrigger(client, currentState)) {
+            return;
+        }
+
+        // A delayed chat trigger owns this pest event. Tab-list updates may refresh
+        // the count, but must not start cleaning before the full delay expires.
+        if (pendingChatTrigger != null) {
+            return;
+        }
 
         if (isCleaningInProgress
                 && currentState == MacroState.State.FARMING
@@ -320,6 +332,35 @@ public class PestManager {
         Minecraft client = Minecraft.getInstance();
         checkTabListForPests(client, MacroStateManager.getCurrentState());
     }
+
+    /** Schedules a chat trigger without blocking the shared worker or farming. */
+    public static synchronized void scheduleChatCleaningTrigger(String plot, int spawnedCount, long delayMs) {
+        long triggerAt = System.currentTimeMillis() + Math.max(0L, delayMs);
+        if (pendingChatTrigger == null) {
+            pendingChatTrigger = new PendingChatTrigger(plot, Math.max(0, spawnedCount), triggerAt);
+            return;
+        }
+        pendingChatTrigger = new PendingChatTrigger(plot, pendingChatTrigger.spawnedCount + Math.max(0, spawnedCount), Math.min(pendingChatTrigger.triggerAtMs, triggerAt));
+    }
+
+    private static synchronized boolean processPendingChatTrigger(Minecraft client, MacroState.State currentState) {
+        PendingChatTrigger pending = pendingChatTrigger;
+        if (pending == null) {
+            return false;
+        }
+        if (currentState != MacroState.State.FARMING) {
+            pendingChatTrigger = null;
+            return false;
+        }
+        if (System.currentTimeMillis() < pending.triggerAtMs) {
+            return false;
+        }
+        pendingChatTrigger = null;
+        tryStartCleaningSequenceFromChat(client, pending.plot, pending.spawnedCount);
+        return true;
+    }
+
+    private record PendingChatTrigger(String plot, int spawnedCount, long triggerAtMs) {}
 
     /**
      * Returns effective pests alive count from tab/chat sync.

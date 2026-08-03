@@ -234,23 +234,10 @@ public final class AetherChatEvents {
         }
 
         final int parsedSpawnedCount = spawnedCount;
-        MacroWorkerThread.getInstance().submit("PestClean-ChatTrigger-" + plot, () -> {
-            if (MacroWorkerThread.shouldAbortTask(Minecraft.getInstance(), MacroState.State.FARMING)) {
-                return;
-            }
-
-            int triggerDelay = ConfigHelpers.getRandomizedDelay(
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get(),
-                    AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get());
-            if (triggerDelay > 0) {
-                MacroWorkerThread.sleep(triggerDelay);
-                if (MacroWorkerThread.shouldAbortTask(Minecraft.getInstance(), MacroState.State.FARMING)) {
-                    return;
-                }
-            }
-
-            PestManager.tryStartCleaningSequenceFromChat(Minecraft.getInstance(), plot, parsedSpawnedCount);
-        });
+        int triggerDelay = ConfigHelpers.getRandomizedDelay(
+                AetherConfig.PEST_CHAT_TRIGGER_DELAY_MIN.get(),
+                AetherConfig.PEST_CHAT_TRIGGER_DELAY_MAX.get());
+        PestManager.scheduleChatCleaningTrigger(plot, parsedSpawnedCount, triggerDelay);
     }
 
     private static void handleStashState(String lowerText) {
