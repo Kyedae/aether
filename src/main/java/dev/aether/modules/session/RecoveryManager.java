@@ -44,7 +44,7 @@ public class RecoveryManager {
         }
     }
 
-    private static final long RECOVERY_COMMAND_DELAY_MS = 10_000L;
+    private static final long RECOVERY_COMMAND_DELAY_MS = 3_000L;
     private static final long WORLD_CHANGE_ALIGN_TIMEOUT_MS = 1200L;
     private static final long WORLD_CHANGE_RESUME_DELAY_MS = 1000L;
     private static int recoveryFailedAttempts = 0;
@@ -80,14 +80,14 @@ public class RecoveryManager {
     public static void beginRecovery() {
         reset();
         beginCommandSequence(RecoveryCommandStage.SKYBLOCK);
-        ClientUtils.sendMessage("\u00A7eRecovery: waiting 10 seconds before /skyblock...", false);
+        ClientUtils.sendMessage("\u00A7eRecovery: waiting 3 seconds before /skyblock...", false);
     }
 
     public static void beginLimboRecovery() {
         reset();
         recoveryMode = RecoveryMode.LIMBO;
         beginCommandSequence(RecoveryCommandStage.LOBBY);
-        ClientUtils.sendMessage("\u00A7eLimbo recovery: waiting 10 seconds before /lobby...", false);
+        ClientUtils.sendMessage("\u00A7eLimbo recovery: waiting 3 seconds before /lobby...", false);
     }
 
     public static void beginWorldChangeRecovery(Vec3 savedPosition) {
@@ -181,7 +181,7 @@ public class RecoveryManager {
         recoveryCommandFailed = false;
         lastRecoveryCommandTime = now;
         ClientUtils.sendMessage("\u00A7eRecovery: running " + recoveryCommandStage.command
-                + ", waiting 10 seconds for a response...", false);
+                + ", waiting 3 seconds for a response...", false);
         ClientUtils.sendCommand(recoveryCommandStage.command);
     }
 
