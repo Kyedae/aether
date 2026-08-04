@@ -12,6 +12,7 @@ import dev.aether.macro.MacroStateManager;
 import dev.aether.modules.ComposterManager;
 import dev.aether.modules.GreenhouseManager;
 import dev.aether.modules.SupercraftManager;
+import dev.aether.modules.TablistSetupManager;
 import dev.aether.modules.discord.DiscordStatusManager;
 import dev.aether.modules.forge.ForgeManager;
 import dev.aether.modules.failsafe.FailsafeTestManager;
@@ -127,6 +128,8 @@ public final class AetherCommandRegistrar {
                                                 false);
                                         return 0;
                                     }))
+                            .then(ClientCommands.literal("setup")
+                                    .executes(ctx -> TablistSetupManager.start(Minecraft.getInstance())))
                             .then(ClientCommands.literal("printscoreboard")
                                     .executes(ctx -> printScoreboard(Minecraft.getInstance())))
                             .then(ClientCommands.literal("rotate")

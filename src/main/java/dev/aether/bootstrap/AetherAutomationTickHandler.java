@@ -37,6 +37,7 @@ import dev.aether.modules.session.DynamicRestManager;
 import dev.aether.modules.session.RecoveryManager;
 import dev.aether.modules.session.RestartManager;
 import dev.aether.modules.SupercraftManager;
+import dev.aether.modules.TablistSetupManager;
 import dev.aether.ui.theme.Theme;
 import dev.aether.util.AetherResources;
 import dev.aether.util.BpsTracker;
@@ -155,6 +156,7 @@ public final class AetherAutomationTickHandler {
         PathfindingManager.update();
         RestartManager.update();
         AutoCarnivalManager.update();
+        TablistSetupManager.update(client);
 
         PestAotvManager.updatePreparationAotv(client);
         PestDestroyer.update();
