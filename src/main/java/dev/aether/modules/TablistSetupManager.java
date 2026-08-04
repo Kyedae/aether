@@ -29,7 +29,10 @@ public final class TablistSetupManager {
             "Skills Widget",
             "Jacob's Contest Widget",
             "Pests Widget",
-            "Visitors Widget");
+            "Visitors Widget",
+            "Composter Widget",
+            "Pest Traps Widget",
+            "Pet Widget");
     private static final Pattern PAGE_PATTERN = Pattern.compile("\\((\\d+)/(\\d+)\\)");
     private static final long AUTO_START_DELAY_MS = 3_000L;
     private static final long TIMEOUT_MS = 60_000L;
