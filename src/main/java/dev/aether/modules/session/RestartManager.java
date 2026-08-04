@@ -205,6 +205,7 @@ public class RestartManager {
         } else if (restartSequenceStage == 2 && System.currentTimeMillis() >= nextRestartActionTime) {
             ClientUtils.sendDebugMessage("Disabling farming macro: Entering recovery mode after server restart");
             client.execute(() -> dev.aether.macro.farming.FarmingMacroManager.disable(client));
+            RecoveryManager.beginRecovery();
             MacroStateManager.setCurrentState(MacroState.State.RECOVERING);
             restartSequenceStage = 0;
             isRestartPending = false;

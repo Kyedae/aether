@@ -36,7 +36,7 @@ final class PestDestroyerProgressController {
             PestDestroyerRuntime runtime,
             long stuckTimeoutMs,
             Context context) {
-        int aliveNow = PestManager.getEffectiveAliveCountNow(client);
+        int aliveNow = PestManager.getPestDestroyerCompletionAliveCountNow(client);
         boolean finishReading = aliveNow >= 0
                 && context.shouldFinishForAliveCount(client, aliveNow);
 
