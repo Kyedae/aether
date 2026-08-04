@@ -145,6 +145,13 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.BALLSACK_SHREDDER.set(v);
                             AetherConfig.save();
                         })
+                .add(new SliderSetting("AOTV Warps", 1, 5,
+                        () -> (float) AetherConfig.BALLSACK_WARPS.get(),
+                        v -> {
+                            AetherConfig.BALLSACK_WARPS.set(Math.round(v));
+                            AetherConfig.save();
+                        })
+                        .withDecimals(0))
                 .add(FarmingSettingsFactory.pestDestroyerTriggerDelaySetting())
                 .add(new SliderSetting("Look Down Time", 0, 3000,
                         () -> (float) AetherConfig.BALLSACK_LOOK_DOWN_TIME_MS.get(),
