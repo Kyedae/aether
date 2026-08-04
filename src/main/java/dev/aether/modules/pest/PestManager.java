@@ -234,10 +234,11 @@ public class PestManager {
 
         // Handle prep swap flag updates based on cooldown
         if (data.cooldownSeconds() != -1) {
-                PestPrepSwapManager.updatePrepSwapFlag(data.cooldownSeconds(), isCleaningInProgress);
+            boolean thresholdMet = isThresholdMet(effectiveAlive);
+            PestPrepSwapManager.updatePrepSwapFlag(
+                    data.cooldownSeconds(), isCleaningInProgress, thresholdMet);
 
             // Check if prep swap should be triggered
-            boolean thresholdMet = isThresholdMet(effectiveAlive);
             if (!thresholdMet && PestPrepSwapManager.shouldTriggerPrepSwap(
                     currentState, data.cooldownSeconds(), isCleaningInProgress,
                     PestReturnManager.isReturnToLocationActive())) {

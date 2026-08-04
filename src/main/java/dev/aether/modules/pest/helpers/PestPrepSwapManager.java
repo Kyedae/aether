@@ -36,11 +36,16 @@ public class PestPrepSwapManager {
         return Minecraft.getInstance();
     }
 
-    public static void updatePrepSwapFlag(int cooldownSeconds, boolean isCleaningInProgress) {
+    public static void updatePrepSwapFlag(int cooldownSeconds, boolean isCleaningInProgress,
+            boolean thresholdMet) {
         if (cooldownSeconds > getPrepSwapResetCooldownSeconds()
                 && prepSwappedForCurrentPestCycle
                 && !isCleaningInProgress) {
-            prepSwappedForCurrentPestCycle = false;
+            if (thresholdMet) {
+                prepSwappedForCurrentPestCycle = false;
+            } else {
+                restoreFarmingLoadout();
+            }
         }
     }
 
@@ -93,6 +98,43 @@ public class PestPrepSwapManager {
 
     private static int getPrepSwapResetCooldownSeconds() {
         return AetherConfig.LOADOUT_PEST_SWAP_TIME_SECONDS.get();
+    }
+
+    private static void restoreFarmingLoadout() {
+        if (isPrepSwapping) {
+            return;
+        }
+
+        isPrepSwapping = true;
+        ClientUtils.sendDebugMessage("Pest spawn stayed below threshold. Restoring farming loadout...");
+        MacroWorkerThread.getInstance().submit("PrepSwap-RestoreFarming", () -> {
+            try {
+                Minecraft client = client();
+                if (MacroWorkerThread.shouldAbortTask(client, MacroState.State.FARMING)
+                        || PestManager.isCleaningInProgress()) {
+                    return;
+                }
+
+                client.execute(() -> dev.aether.macro.farming.FarmingMacroManager.disable(client));
+                MacroWorkerThread.sleep(400);
+                if (MacroWorkerThread.shouldAbortTask(client, MacroState.State.FARMING)
+                        || PestManager.isCleaningInProgress()) {
+                    return;
+                }
+
+                if (PestReturnManager.restoreFarmingLoadout(client)
+                        && !PestManager.isCleaningInProgress()) {
+                    GearManager.finalResume(client);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                if (!PestManager.isCleaningInProgress()) {
+                    prepSwappedForCurrentPestCycle = false;
+                }
+                isPrepSwapping = false;
+            }
+        });
     }
 
     private static boolean shouldAbortPrepSwap() {
