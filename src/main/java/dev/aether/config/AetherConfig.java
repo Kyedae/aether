@@ -198,6 +198,7 @@ public final class AetherConfig {
 
         public static final BooleanEntry AUTO_UPDATE = Config.bool("autoUpdate", false);
         public static final StringEntry LANGUAGE_CODE = Config.string("languageCode", "en_us");
+        public static final BooleanEntry TABLIST_SETUP_COMPLETE = Config.bool("tablistSetupComplete", false);
 
         // -- PEST ------------------------------------------------------------------
 
