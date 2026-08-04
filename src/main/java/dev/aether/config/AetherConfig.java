@@ -415,6 +415,8 @@ public final class AetherConfig {
 
         public static final IntEntry PEST_THRESHOLD = Config.integer("pestThreshold", 2).range(1, 8);
         public static final BooleanEntry TRIGGER_PEST_ON_CHAT = Config.bool("triggerPestOnChat", true);
+        public static final BooleanEntry ESTIMATE_PEST_DESTROYER_COMPLETION =
+                        Config.bool("estimatePestDestroyerCompletion", true);
         public static final BooleanEntry PEST_TRIGGER_ONLY_AFTER_REWARP = Config.bool("pestTriggerOnlyAfterRewarp", false);
         public static final IntEntry PEST_CHAT_TRIGGER_DELAY_MIN = Config.integer("pestChatTriggerDelayMin", 500)
                         .range(0, 30000);

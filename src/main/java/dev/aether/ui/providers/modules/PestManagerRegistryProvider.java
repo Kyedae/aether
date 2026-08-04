@@ -83,6 +83,12 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.save();
                         })
                         .withDecimals(0))
+                .add(new ToggleSetting("Estimate Pest Destroyer Completion",
+                        AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION::get,
+                        v -> {
+                            AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION.set(v);
+                            AetherConfig.save();
+                        }))
                 .add(new ToggleSetting("Skip while Crop Fever Active",
                         () -> AetherConfig.DELAY_PEST_FOR_CROP_FEVER.get(),
                         v -> {
