@@ -47,14 +47,16 @@ final class PestBallsackShredder {
             ClientUtils.setKeyMappingState(client.options.keyUse, true);
         });
 
-        int positionChanges = waitForPositionChanges(client, sessionId);
+        int requiredWarps = AetherConfig.BALLSACK_WARPS.get();
+        int positionChanges = waitForPositionChanges(client, sessionId, requiredWarps);
         releaseAotvKeys(client);
         if (shouldAbort(client, sessionId)) {
             return Result.unmeasured(false, startingPests);
         }
-        if (positionChanges < 2) {
+        if (positionChanges < requiredWarps) {
             ClientUtils.sendDebugMessage("Ballsack Shredder: AOTV timed out after "
-                    + positionChanges + " position change(s); continuing pest cleaning.");
+                    + positionChanges + " of " + requiredWarps
+                    + " position change(s); continuing pest cleaning.");
             return Result.unmeasured(true, startingPests);
         }
 
@@ -130,7 +132,8 @@ final class PestBallsackShredder {
         return new Result(true, true, estimatedKilled, normalizedStart - estimatedKilled);
     }
 
-    private static int waitForPositionChanges(Minecraft client, int sessionId) throws InterruptedException {
+    private static int waitForPositionChanges(Minecraft client, int sessionId, int requiredWarps)
+            throws InterruptedException {
         Vec3 lastPosition = PestClientThread.call(client, () -> client.player.position(), null);
         if (lastPosition == null) {
             return 0;
@@ -138,7 +141,9 @@ final class PestBallsackShredder {
 
         int changes = 0;
         long deadline = System.currentTimeMillis() + AOTV_TIMEOUT_MS;
-        while (changes < 2 && System.currentTimeMillis() < deadline && !shouldAbort(client, sessionId)) {
+        while (changes < requiredWarps
+                && System.currentTimeMillis() < deadline
+                && !shouldAbort(client, sessionId)) {
             MacroWorkerThread.sleep(25);
             Vec3 previousPosition = lastPosition;
             Vec3 currentPosition = PestClientThread.call(client, () -> client.player.position(), previousPosition);

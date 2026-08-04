@@ -252,8 +252,12 @@ public class PestManager {
         if (currentState == MacroState.State.CLEANING
                 && !GreenhouseManager.isRunning()
                 && !ManualPestManager.isActive()) {
-            updateCleaningProgressTracker(effectiveAlive);
-            if (effectiveAlive <= 0) {
+            int completionAlive = selectCompletionAliveCount(
+                    AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION.get(),
+                    data.aliveCount(),
+                    effectiveAlive);
+            updateCleaningProgressTracker(completionAlive);
+            if (completionAlive <= 0) {
                 if (lastZeroPestTime == 0) {
                     lastZeroPestTime = System.currentTimeMillis();
                 } else if (System.currentTimeMillis() - lastZeroPestTime > 10000) {
@@ -266,11 +270,11 @@ public class PestManager {
                 lastZeroPestTime = 0;
             }
 
-            if (shouldAbortCleaningForStall(effectiveAlive)) {
+            if (shouldAbortCleaningForStall(completionAlive)) {
                 ClientUtils.sendMessage("\u00A7cPest cleaner made no pest-count progress for 30s. Aborting cleaner.",
                         true);
                 ClientUtils.sendDebugMessage("PestManager: aborting pest cleaner after 30s without alive-count progress. Last alive="
-                                + lastCleaningAliveCount + ", current alive=" + effectiveAlive);
+                                + lastCleaningAliveCount + ", current alive=" + completionAlive);
                 resetCleaningProgressTracker();
                 handlePestCleaningFinished(client);
                 return;
@@ -431,6 +435,24 @@ public class PestManager {
         return getEffectiveAliveCount(data.aliveCount());
     }
 
+    /**
+     * Count used only to decide whether Pest Destroyer is complete. When
+     * estimation is disabled, a missing pests line is treated as the tab
+     * reporting zero pests after the destroyer's normal confirmation guard.
+     */
+    public static int getPestDestroyerCompletionAliveCountNow(Minecraft client) {
+        if (client == null || client.getConnection() == null || client.player == null) {
+            return -1;
+        }
+
+        PestTabSnapshot data = parseTabList(client);
+        if (!AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION.get()) {
+            return Math.max(0, data.aliveCount());
+        }
+        syncPredictedAliveFromTab(data.aliveCount());
+        return getEffectiveAliveCount(data.aliveCount());
+    }
+
     public static boolean startCleaningSequence(Minecraft client, String plot) {
         return startCleaningSequence(client, plot, Math.max(1, getEffectiveAliveCountNow(client)));
     }
@@ -534,7 +556,9 @@ public class PestManager {
                             + ", currentPlot=" + ClientUtils.getCurrentPlot()
                             + ", whitelistedPlots=" + AetherConfig.LEAVE_ONE_PEST_PLOTS.get());
 
-            if (PestDestroyer.isActive() && PestDestroyer.shouldFinishForAliveCount(client, predictedAliveCount)) {
+            if (AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION.get()
+                    && PestDestroyer.isActive()
+                    && PestDestroyer.shouldFinishForAliveCount(client, predictedAliveCount)) {
                 String reason = predictedAliveCount == 0
                         ? "0 pests predicted"
                         : "only whitelisted leave-one plot(s) predicted remaining";
@@ -572,6 +596,13 @@ public class PestManager {
             return predictedAliveCount;
         }
         return Math.max(tabAliveCount, predictedAliveCount);
+    }
+
+    static int selectCompletionAliveCount(
+            boolean estimateCompletion,
+            int tabAliveCount,
+            int effectiveAliveCount) {
+        return estimateCompletion ? effectiveAliveCount : Math.max(0, tabAliveCount);
     }
 
     private static boolean hasRecentLocalKill(long now) {

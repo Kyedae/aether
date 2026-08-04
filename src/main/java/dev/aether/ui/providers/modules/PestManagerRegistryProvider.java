@@ -83,6 +83,12 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.save();
                         })
                         .withDecimals(0))
+                .add(new ToggleSetting("Estimate Pest Destroyer Completion",
+                        AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION::get,
+                        v -> {
+                            AetherConfig.ESTIMATE_PEST_DESTROYER_COMPLETION.set(v);
+                            AetherConfig.save();
+                        }))
                 .add(new ToggleSetting("Skip while Crop Fever Active",
                         () -> AetherConfig.DELAY_PEST_FOR_CROP_FEVER.get(),
                         v -> {
@@ -145,6 +151,13 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.BALLSACK_SHREDDER.set(v);
                             AetherConfig.save();
                         })
+                .add(new SliderSetting("AOTV Warps", 1, 5,
+                        () -> (float) AetherConfig.BALLSACK_WARPS.get(),
+                        v -> {
+                            AetherConfig.BALLSACK_WARPS.set(Math.round(v));
+                            AetherConfig.save();
+                        })
+                        .withDecimals(0))
                 .add(FarmingSettingsFactory.pestDestroyerTriggerDelaySetting())
                 .add(new SliderSetting("Look Down Time", 0, 3000,
                         () -> (float) AetherConfig.BALLSACK_LOOK_DOWN_TIME_MS.get(),

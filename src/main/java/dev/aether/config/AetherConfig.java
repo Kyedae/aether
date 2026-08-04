@@ -416,6 +416,8 @@ public final class AetherConfig {
 
         public static final IntEntry PEST_THRESHOLD = Config.integer("pestThreshold", 2).range(1, 8);
         public static final BooleanEntry TRIGGER_PEST_ON_CHAT = Config.bool("triggerPestOnChat", true);
+        public static final BooleanEntry ESTIMATE_PEST_DESTROYER_COMPLETION =
+                        Config.bool("estimatePestDestroyerCompletion", true);
         public static final BooleanEntry PEST_TRIGGER_ONLY_AFTER_REWARP = Config.bool("pestTriggerOnlyAfterRewarp", false);
         public static final IntEntry PEST_CHAT_TRIGGER_DELAY_MIN = Config.integer("pestChatTriggerDelayMin", 500)
                         .range(0, 30000);
@@ -449,6 +451,7 @@ public final class AetherConfig {
                         Collections.emptyList(), String.class);
         public static final BooleanEntry SUNSET_PESTS = Config.bool("sunsetPests", false);
         public static final BooleanEntry BALLSACK_SHREDDER = Config.bool("ballsackShredder", false);
+        public static final IntEntry BALLSACK_WARPS = Config.integer("ballsackWarps", 2).range(1, 5);
         public static final IntEntry BALLSACK_LOOK_DOWN_TIME_MS = Config.integer("ballsackLookDownTimeMs", 1000)
                         .range(0, 3000);
         public static final BooleanEntry PEST_AOTV_BETWEEN = Config.bool("pestAotvBetween", false);
