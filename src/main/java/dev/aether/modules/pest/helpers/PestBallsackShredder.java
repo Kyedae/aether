@@ -87,6 +87,18 @@ final class PestBallsackShredder {
         return result;
     }
 
+    static boolean shouldRunOnPlot(String plot) {
+        return AetherConfig.BALLSACK_SHREDDER.get()
+                && isConfiguredForPlot(plot, AetherConfig.BALLSACK_SHREDDER_PLOTS.get());
+    }
+
+    static boolean isConfiguredForPlot(String plot, List<String> configuredPlots) {
+        if (configuredPlots == null || configuredPlots.isEmpty()) {
+            return true;
+        }
+        return configuredPlots.stream().anyMatch(configuredPlot -> PestPlotId.equals(configuredPlot, plot));
+    }
+
     private static Result awaitResultEvidence(
             Minecraft client,
             int sessionId,

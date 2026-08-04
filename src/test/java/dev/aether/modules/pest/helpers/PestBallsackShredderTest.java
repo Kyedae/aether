@@ -2,9 +2,25 @@ package dev.aether.modules.pest.helpers;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PestBallsackShredderTest {
+    @Test
+    void emptyPlotListAppliesToEveryPlot() {
+        assertTrue(PestBallsackShredder.isConfiguredForPlot("17", List.of()));
+        assertTrue(PestBallsackShredder.isConfiguredForPlot("unknown", List.of()));
+    }
+
+    @Test
+    void configuredPlotListOnlyAppliesToListedPlots() {
+        assertTrue(PestBallsackShredder.isConfiguredForPlot("Plot 17", List.of("17")));
+        assertFalse(PestBallsackShredder.isConfiguredForPlot("18", List.of("17")));
+    }
+
     @Test
     void estimatesMultipleKillsFromTrackedEntities() {
         PestBallsackShredder.Result result =
