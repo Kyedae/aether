@@ -54,12 +54,13 @@ final class PestRoofAotvController {
         runtime.aotvStartY = Double.NaN;
         releaseAotvKeys(client);
         float targetYaw = client.player.getYRot() + (float) (-10.0 + Math.random() * 20.0);
-        float targetPitch = AetherConfig.BALLSACK_SHREDDER.get()
+        boolean ballsackOnPlot = PestBallsackShredder.shouldRunOnPlot(ClientUtils.getCurrentPlot());
+        float targetPitch = ballsackOnPlot
                 ? 90.0f
                 : (float) (-30.0 + Math.random() * 60.0);
         RotationManager.rotateToYawPitch(
                 client, targetYaw, targetPitch, AetherConfig.ROTATION_TIME.get(), true);
-        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+        if (ballsackOnPlot) {
             PestAotvManager.setSneakingForAotv(false);
             PestDestroyer.setState(PestDestroyer.State.AOTV_POST_LOOKDOWN);
         } else {

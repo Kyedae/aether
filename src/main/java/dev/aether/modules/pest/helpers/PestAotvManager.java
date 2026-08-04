@@ -101,7 +101,7 @@ public class PestAotvManager {
     }
 
     public static boolean shouldDoAotvOnCurrentPlot(Minecraft client, String currentInfestedPlot, boolean isSamePlot) {
-        if (AetherConfig.BALLSACK_SHREDDER.get() || !AetherConfig.AOTV_TO_ROOF.get())
+        if (PestBallsackShredder.shouldRunOnPlot(currentInfestedPlot) || !AetherConfig.AOTV_TO_ROOF.get())
             return false;
 
         if (AetherConfig.AOTV_ROOF_PLOTS.get().isEmpty())
@@ -250,13 +250,17 @@ public class PestAotvManager {
 
     /** Performs the post-roof view reset on the worker after its AOTV phase has ended. */
     public static void rotateDownAfterAotv(Minecraft client) throws InterruptedException {
+        rotateDownAfterAotv(client, false);
+    }
+
+    public static void rotateDownAfterAotv(Minecraft client, boolean ballsackOnPlot) throws InterruptedException {
         if (client == null || client.player == null) {
             return;
         }
 
         float targetYaw = PestClientThread.call(
                 client, () -> client.player.getYRot() + randomYawOffset(), 0.0f);
-        float targetPitch = AetherConfig.BALLSACK_SHREDDER.get()
+        float targetPitch = ballsackOnPlot
                 ? 90.0f
                 : (float) (-30.0 + Math.random() * 60.0);
         int rotTime = (int) (AetherConfig.ROTATION_TIME.get() * (0.92 + Math.random() * 0.16));
@@ -277,7 +281,7 @@ public class PestAotvManager {
             MacroWorkerThread.sleep(20);
         }
 
-        if (AetherConfig.BALLSACK_SHREDDER.get()) {
+        if (ballsackOnPlot) {
             int vacuumSlot = PestLoadoutHelper.findVacuumHotbarSlot(client);
             if (vacuumSlot >= 0 && vacuumSlot < 9) {
                 PestClientThread.run(client, () -> {

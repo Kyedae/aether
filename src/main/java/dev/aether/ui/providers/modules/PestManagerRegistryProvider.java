@@ -151,6 +151,13 @@ public final class PestManagerRegistryProvider extends AbstractModulesRegistryPr
                             AetherConfig.BALLSACK_SHREDDER.set(v);
                             AetherConfig.save();
                         })
+                .add(new ListSetting("Ballsack Shredder Plots", "Add plot number",
+                        () -> AetherConfig.BALLSACK_SHREDDER_PLOTS.get(),
+                        v -> {
+                            AetherConfig.BALLSACK_SHREDDER_PLOTS.set(v);
+                            AetherConfig.save();
+                        })
+                        .visibleWhen(AetherConfig.BALLSACK_SHREDDER::get))
                 .add(new SliderSetting("AOTV Warps", 1, 5,
                         () -> (float) AetherConfig.BALLSACK_WARPS.get(),
                         v -> {
